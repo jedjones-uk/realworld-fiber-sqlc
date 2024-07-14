@@ -1,0 +1,15 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: "./postgresql/schema.sql"
+    queries: "./queries.sql"
+    rules:
+      - sqlc/db-prepare
+    gen:
+      go:
+        sql_package: "pgx/v5"
+        package: "db"
+        out: "./"
+        emit_prepared_queries: false
+        emit_exact_table_names: false
+        emit_empty_slices: true

@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=realworld
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  app:
+    image: realworld:latest
+    container_name: realworld
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/realworld
+      - PORT=4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres-data:
