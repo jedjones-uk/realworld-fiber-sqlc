@@ -1,6 +1,9 @@
 package http
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/gofiber/fiber/v2"
+	"realworld-fiber-sqlc/internal/controller/http/handlers"
+)
 
 func NewRouter(app *fiber.App) {
 
@@ -13,8 +16,8 @@ func NewRouter(app *fiber.App) {
 
 	//user
 	user := api.Group("user")
-	user.Get("/")
-	user.Put("/")
+	user.Get("/", handlers.GetUser)
+	user.Put("/", handlers.UpdateProfile)
 
 	//	profilesRoute
 	profilesRoute := api.Group("profilesRoute")
