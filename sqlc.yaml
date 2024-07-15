@@ -1,15 +1,15 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: "usecase/database/migrations/schema.sql"
-    queries: "usecase/database/query"
+    schema: "usecase/dto/migrations/schema.sql"
+    queries: "usecase/dto/query"
     rules:
-      - sqlc/database-prepare
+      - sqlc/dto-prepare
     gen:
       go:
         sql_package: "pgx/v5"
         package: "sqlc"
-        out: "usecase/database/sqlc"
+        out: "usecase/dto/sqlc"
         emit_prepared_queries: false
         emit_exact_table_names: false
         emit_empty_slices: true

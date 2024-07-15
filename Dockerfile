@@ -17,5 +17,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /realworld/realwo
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /realworld/realworld /realworld
-EXPOSE 4000
+EXPOSE 3000
 ENTRYPOINT ["/realworld"]

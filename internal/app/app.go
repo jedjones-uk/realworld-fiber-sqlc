@@ -1,29 +1,44 @@
 package app
 
 import (
-	"context"
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"realworld-fiber-sqlc/pkg/logger"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"log"
+	"realworld-fiber-sqlc/internal/controller/http"
+	"realworld-fiber-sqlc/usecase/dto"
+	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
 func Run() {
 
 	// logger
-	l := logger.New("debug")
+	//connString := "host=localhost port=5432 user=postgres password=postgres dbname=realworld sslmode=disable"
+	//maxRetries := 10
+	//retryInterval := 5 * time.Second
 
-	// database
-	connString := "host=localhost port=5432 user=postgres password=postgres dbname=realworld sslmode=disable"
-	dbpool, err := pgxpool.New(context.Background(), connString)
+	var err error
+	pool, err := dto.NewPool()
 	if err != nil {
-		l.Fatal("Unable to connect to database", err)
+		log.Fatal(err)
 	}
-	defer dbpool.Close()
+	defer pool.Close()
+	dbQueries := sqlc.New(pool)
 
-	//	http server
+	log.Printf("Connected to the database")
+
+	//handler := handlers.NewHandlerQ(dbQueries)
+
 	app := fiber.New()
-	err = app.Listen(":4000")
-	if err != nil {
-		return
-	}
+
+	http.NewRouter(app, dbQueries)
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, HEAD, PUT, PATCH, POST, DELETE",
+	}))
+
+	//app.Use(l)
+	app.Listen(":3000")
+
 }

@@ -39,13 +39,6 @@ type Favorite struct {
 	ArticleID int32
 }
 
-type Profile struct {
-	ID     int64
-	UserID pgtype.Int8
-	Bio    pgtype.Text
-	Image  pgtype.Text
-}
-
 type Tag struct {
 	ID  int32
 	Tag string
@@ -56,4 +49,6 @@ type User struct {
 	Email    string
 	Username string
 	Password string
+	Bio      pgtype.Text
+	Image    pgtype.Text
 }
