@@ -65,10 +65,18 @@ func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
 		Image:    params.User.Image,
 	}
 
-	err := h.Queries.UpdateUser(c.Context(), updateProfileParams)
+	user, err := h.Queries.UpdateUser(c.Context(), updateProfileParams)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.Status(200).JSON(fiber.Map{"message": "Profile updated"})
+	resp := CurrentUserResp{
+		Email:    user.Email,
+		Username: user.Username,
+		Bio:      user.Bio.String,
+		Image:    user.Image.String,
+		Token:    c.Locals("user").(*jwt.Token).Raw,
+	}
+
+	return c.Status(200).JSON(fiber.Map{"user": resp})
 }
