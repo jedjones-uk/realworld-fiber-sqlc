@@ -60,3 +60,24 @@ WITH followee AS (
 )
 DELETE FROM follows
 WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee);
+
+-- name: GetProfileById :one
+WITH profile_data AS (
+    SELECT
+        u.username,
+        u.bio,
+        u.image,
+        CASE
+            WHEN f.follower_id IS NOT NULL THEN true
+            ELSE false
+            END AS following
+    FROM users u
+             LEFT JOIN follows f ON u.id = f.followee_id AND f.follower_id = $2
+    WHERE u.id = $1
+)
+SELECT
+    username,
+    bio,
+    image,
+    COALESCE(following, false) AS following
+FROM profile_data;

@@ -13,7 +13,6 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 
 	api := app.Group("/api")
 
-	//articlesRoute := api.Group("articles")
 	//commentsRoute := articlesRoute.Group("/:slug/comments")
 	users := api.Group("/users")
 
@@ -30,7 +29,10 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 	profilesRoute.Get("/:username", handlerBase.GetProfile)
 	//
 	//articlesRoute.Get("/")
-	//articlesRoute.Get("/:slug")
+
+	articlesRoute := api.Group("/articles")
+
+	articlesRoute.Get("/:slug", handlerBase.GetArticle)
 	//
 	//app.Get("api/tags")
 
@@ -45,18 +47,19 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 
 	//articlesRoute.Get("/feed")
 	//
-	//articlesRoute.Post("/")
-	//articlesRoute.Put("/:slug")
-	//articlesRoute.Delete("/:slug")
+	articlesRoute.Post("/", middleware.Protected(), handlerBase.CreateArticle)
+	articlesRoute.Put("/:slug", middleware.Protected(), handlerBase.UpdateArticle)
+	articlesRoute.Delete("/:slug", middleware.Protected(), handlerBase.DeleteArticle)
 	//
-	////comments
+	//comments
 	//
+	//commentsRoute := articlesRoute.Group("/:slug/comments")
 	//commentsRoute.Post("/")
 	//commentsRoute.Get("/")
 	//commentsRoute.Delete("/:id")
 	//
-	////ffv
-	//app.Get("/api/articles/:slug/favorite")
-	//app.Delete("/api/articles/:slug/favorite")
+	//ffv
+	app.Post("/api/articles/:slug/favorite", middleware.Protected(), handlerBase.FavoriteArticle)
+	app.Delete("/api/articles/:slug/favorite", middleware.Protected(), handlerBase.UnfavoriteArticle)
 
 }

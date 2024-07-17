@@ -48,6 +48,52 @@ func (q *Queries) FollowUser(ctx context.Context, arg FollowUserParams) error {
 	return err
 }
 
+const getProfileById = `-- name: GetProfileById :one
+WITH profile_data AS (
+    SELECT
+        u.username,
+        u.bio,
+        u.image,
+        CASE
+            WHEN f.follower_id IS NOT NULL THEN true
+            ELSE false
+            END AS following
+    FROM users u
+             LEFT JOIN follows f ON u.id = f.followee_id AND f.follower_id = $2
+    WHERE u.id = $1
+)
+SELECT
+    username,
+    bio,
+    image,
+    COALESCE(following, false) AS following
+FROM profile_data
+`
+
+type GetProfileByIdParams struct {
+	ID         int64
+	FollowerID int64
+}
+
+type GetProfileByIdRow struct {
+	Username  string
+	Bio       pgtype.Text
+	Image     pgtype.Text
+	Following bool
+}
+
+func (q *Queries) GetProfileById(ctx context.Context, arg GetProfileByIdParams) (GetProfileByIdRow, error) {
+	row := q.db.QueryRow(ctx, getProfileById, arg.ID, arg.FollowerID)
+	var i GetProfileByIdRow
+	err := row.Scan(
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Following,
+	)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 
 SELECT id, email, username, password, bio, image
