@@ -7,10 +7,13 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, username, password) VALUES ($1, $2, $3)
+INSERT INTO users (email, username, password)
+VALUES ($1, $2, $3)
 RETURNING id
 `
 
@@ -27,9 +30,29 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, 
 	return id, err
 }
 
+const followUser = `-- name: FollowUser :exec
+WITH followee AS (
+    SELECT id FROM users WHERE username = $1
+)
+INSERT INTO follows (follower_id, followee_id)
+SELECT $2, id FROM followee
+`
+
+type FollowUserParams struct {
+	Username   string
+	FollowerID int64
+}
+
+func (q *Queries) FollowUser(ctx context.Context, arg FollowUserParams) error {
+	_, err := q.db.Exec(ctx, followUser, arg.Username, arg.FollowerID)
+	return err
+}
+
 const getUser = `-- name: GetUser :one
 
-SELECT id, email, username, password, bio, image FROM users WHERE id = $1
+SELECT id, email, username, password, bio, image
+FROM users
+WHERE id = $1
 `
 
 // user.sql
@@ -48,7 +71,9 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, username, password, bio, image FROM users WHERE email = $1
+SELECT id, email, username, password, bio, image
+FROM users
+WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -65,16 +90,78 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getUserProfile = `-- name: GetUserProfile :one
+WITH profile_data AS (
+    SELECT
+        u.username,
+        u.bio,
+        u.image,
+        CASE
+            WHEN f.follower_id IS NOT NULL THEN true
+            ELSE false
+            END AS following
+    FROM users u
+             LEFT JOIN follows f ON u.id = f.followee_id AND f.follower_id = $2
+    WHERE u.username = $1
+)
+SELECT
+    username,
+    bio,
+    image,
+    COALESCE(following, false) AS following
+FROM profile_data
+`
+
+type GetUserProfileParams struct {
+	Username   string
+	FollowerID int64
+}
+
+type GetUserProfileRow struct {
+	Username  string
+	Bio       pgtype.Text
+	Image     pgtype.Text
+	Following bool
+}
+
+func (q *Queries) GetUserProfile(ctx context.Context, arg GetUserProfileParams) (GetUserProfileRow, error) {
+	row := q.db.QueryRow(ctx, getUserProfile, arg.Username, arg.FollowerID)
+	var i GetUserProfileRow
+	err := row.Scan(
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Following,
+	)
+	return i, err
+}
+
+const unfollowUser = `-- name: UnfollowUser :exec
+WITH followee AS (
+    SELECT id FROM users WHERE username = $1
+)
+DELETE FROM follows
+WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee)
+`
+
+type UnfollowUserParams struct {
+	Username   string
+	FollowerID int64
+}
+
+func (q *Queries) UnfollowUser(ctx context.Context, arg UnfollowUserParams) error {
+	_, err := q.db.Exec(ctx, unfollowUser, arg.Username, arg.FollowerID)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
-SET
-    email = CASE WHEN $2::text IS NOT NULL AND $2::text <> '' THEN $2::text ELSE email END,
+SET email    = CASE WHEN $2::text IS NOT NULL AND $2::text <> '' THEN $2::text ELSE email END,
     username = CASE WHEN $3::text IS NOT NULL AND $3::text <> '' THEN $3::text ELSE username END,
     password = CASE WHEN $4::text IS NOT NULL AND $4::text <> '' THEN $4::text ELSE password END,
-    image = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE image END,
-    bio = CASE WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text ELSE bio END
-WHERE
-    id = $1
+    image    = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE image END,
+    bio      = CASE WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text ELSE bio END
+WHERE id = $1
 RETURNING id, email, username, password, bio, image
 `
 

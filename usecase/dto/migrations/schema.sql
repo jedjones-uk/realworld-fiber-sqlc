@@ -57,10 +57,16 @@ CREATE TABLE comments
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE follows
+(
+    follower_id BIGINT REFERENCES users (id) ON DELETE CASCADE,
+    followee_id BIGINT REFERENCES users (id) ON DELETE CASCADE,
+    PRIMARY KEY (follower_id, followee_id)
+);
+
 -- Indexes for performance
--- CREATE INDEX idx_users_email ON users (email);
--- CREATE INDEX idx_users_username ON users (username);
--- CREATE INDEX idx_profiles_user_id ON profiles (user_id);
--- CREATE INDEX idx_articles_author_id ON articles (author_id);
--- CREATE INDEX idx_comments_article_id ON comments (article_id);
--- CREATE INDEX idx_comments_user_id ON comments (user_id);
+CREATE INDEX idx_users_email ON users (email);
+CREATE INDEX idx_users_username ON users (username);
+CREATE INDEX idx_articles_author_id ON articles (author_id);
+CREATE INDEX idx_comments_article_id ON comments (article_id);
+CREATE INDEX idx_comments_user_id ON comments (user_id);

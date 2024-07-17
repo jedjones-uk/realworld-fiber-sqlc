@@ -12,19 +12,22 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 	handlerBase := handlers.NewHandlerQ(dbQueries)
 
 	api := app.Group("/api")
-	//profilesRoute := api.Group("/profile")
-	users := api.Group("/users")
-	user := api.Group("/user")
+
 	//articlesRoute := api.Group("articles")
 	//commentsRoute := articlesRoute.Group("/:slug/comments")
+	users := api.Group("/users")
 
 	users.Post("/login", handlerBase.Login)
 	users.Post("/", handlerBase.Register)
 
+	user := api.Group("/user")
+
 	user.Get("/", middleware.Protected(), handlerBase.CurrentUser)
 	user.Put("/", middleware.Protected(), handlerBase.UpdateProfile)
 	//
-	//profilesRoute.Get("/:username")
+
+	profilesRoute := api.Group("/profiles")
+	profilesRoute.Get("/:username", handlerBase.GetProfile)
 	//
 	//articlesRoute.Get("/")
 	//articlesRoute.Get("/:slug")
@@ -33,10 +36,10 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 
 	//user
 
-	//	profilesRoute
+	//profilesRoute
 	//
-	//profilesRoute.Post("/:username/follow")
-	//profilesRoute.Delete("/:username/follow")
+	profilesRoute.Post("/:username/follow", middleware.Protected(), handlerBase.Follow)
+	profilesRoute.Delete("/:username/follow", middleware.Protected(), handlerBase.Unfollow)
 	//
 	////	articles
 

@@ -39,6 +39,11 @@ type Favorite struct {
 	ArticleID int32
 }
 
+type Follow struct {
+	FollowerID int64
+	FolloweeID int64
+}
+
 type Tag struct {
 	ID  int32
 	Tag string
