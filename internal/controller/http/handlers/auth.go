@@ -6,8 +6,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"log"
 	"realworld-fiber-sqlc/pkg/hash"
+	jwt2 "realworld-fiber-sqlc/pkg/jwt"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
-	"time"
+	"strconv"
 )
 
 type RegisterParamsT struct {
@@ -35,6 +36,21 @@ type UserObj struct {
 	Image    string `json:"image"`
 }
 
+func userIDFromToken(c *fiber.Ctx) int64 {
+	token, ok := c.Locals("user").(*jwt.Token)
+	if !ok {
+		return 0
+	}
+	claims := token.Claims.(jwt.MapClaims)
+	subj, err := claims.GetSubject()
+	if err != nil {
+		return 0
+	}
+
+	id, _ := strconv.ParseInt(subj, 10, 64)
+	return id
+}
+
 func (h *HandlerBase) Login(c *fiber.Ctx) error {
 	var params LoginParams
 	if err := c.BodyParser(&params); err != nil {
@@ -56,16 +72,7 @@ func (h *HandlerBase) Login(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"message": "Invalid password"})
 	}
 
-	claims := jwt.MapClaims{
-		"id":  user.ID,
-		"exp": time.Now().Add(time.Hour * 72).Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	t, err := token.SignedString([]byte("secret"))
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
+	t, _ := jwt2.GenerateToken(user.ID)
 
 	loginResponse := UserObj{
 		Email:    user.Email,
@@ -107,17 +114,7 @@ func (h *HandlerBase) Register(c *fiber.Ctx) error {
 		return err
 	}
 
-	claims := jwt.MapClaims{
-		"id":  id,
-		"exp": time.Now().Add(time.Hour * 72).Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	t, err := token.SignedString([]byte("secret"))
-	if err != nil {
-		log.Printf("error: %v", err)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
+	t, _ := jwt2.GenerateToken(id)
 
 	loginResponse := UserObj{
 		Email:    params.User.Email,

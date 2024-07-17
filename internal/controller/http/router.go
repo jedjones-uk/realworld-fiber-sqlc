@@ -1,13 +1,13 @@
 package http
 
 import (
-	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"realworld-fiber-sqlc/internal/controller/http/handlers"
+	"realworld-fiber-sqlc/pkg/middleware"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
-func NewRouter(app *fiber.App, dbQueries *sqlc.Queries) {
+func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 
 	handlerBase := handlers.NewHandlerQ(dbQueries)
 
@@ -18,13 +18,11 @@ func NewRouter(app *fiber.App, dbQueries *sqlc.Queries) {
 	//articlesRoute := api.Group("articles")
 	//commentsRoute := articlesRoute.Group("/:slug/comments")
 
-	//auth
-
 	users.Post("/login", handlerBase.Login)
 	users.Post("/", handlerBase.Register)
 
-	user.Get("/", handlerBase.GetUser)
-	//user.Put("/", handlers.UpdateProfile)
+	user.Get("/", middleware.Protected(), handlerBase.CurrentUser)
+	user.Put("/", middleware.Protected(), handlerBase.UpdateProfile)
 	//
 	//profilesRoute.Get("/:username")
 	//
@@ -32,12 +30,6 @@ func NewRouter(app *fiber.App, dbQueries *sqlc.Queries) {
 	//articlesRoute.Get("/:slug")
 	//
 	//app.Get("api/tags")
-
-	app.Use(jwtware.New(jwtware.Config{
-		SigningKey: jwtware.SigningKey{
-			Key: []byte("secret"),
-		},
-	}))
 
 	//user
 

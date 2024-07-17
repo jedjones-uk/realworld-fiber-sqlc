@@ -65,8 +65,17 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
-const updateUser = `-- name: UpdateUser :exec
-UPDATE users SET email = $2, username = $3, password = $4 WHERE id = $1
+const updateUser = `-- name: UpdateUser :one
+UPDATE users
+SET
+    email = CASE WHEN $2::text IS NOT NULL AND $2::text <> '' THEN $2::text ELSE email END,
+    username = CASE WHEN $3::text IS NOT NULL AND $3::text <> '' THEN $3::text ELSE username END,
+    password = CASE WHEN $4::text IS NOT NULL AND $4::text <> '' THEN $4::text ELSE password END,
+    image = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE image END,
+    bio = CASE WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text ELSE bio END
+WHERE
+    id = $1
+RETURNING id, email, username, password, bio, image
 `
 
 type UpdateUserParams struct {
@@ -74,14 +83,27 @@ type UpdateUserParams struct {
 	Email    string
 	Username string
 	Password string
+	Image    string
+	Bio      string
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
-	_, err := q.db.Exec(ctx, updateUser,
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUser,
 		arg.ID,
 		arg.Email,
 		arg.Username,
 		arg.Password,
+		arg.Image,
+		arg.Bio,
 	)
-	return err
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.Password,
+		&i.Bio,
+		&i.Image,
+	)
+	return i, err
 }
