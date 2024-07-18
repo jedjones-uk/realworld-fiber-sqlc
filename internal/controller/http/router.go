@@ -13,7 +13,6 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 
 	api := app.Group("/api")
 
-	//commentsRoute := articlesRoute.Group("/:slug/comments")
 	users := api.Group("/users")
 
 	users.Post("/login", handlerBase.Login)
@@ -34,7 +33,7 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 
 	articlesRoute.Get("/:slug", handlerBase.GetArticle)
 	//
-	//app.Get("api/tags")
+	app.Get("api/tags", handlerBase.GetTags)
 
 	//user
 
@@ -53,8 +52,9 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 	//
 	//comments
 	//
+	commentsRoute := articlesRoute.Group("/:slug/comments")
 	//commentsRoute := articlesRoute.Group("/:slug/comments")
-	//commentsRoute.Post("/")
+	commentsRoute.Post("/", middleware.Protected(), handlerBase.CreateComment)
 	//commentsRoute.Get("/")
 	//commentsRoute.Delete("/:id")
 	//

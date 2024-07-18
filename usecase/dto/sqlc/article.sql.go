@@ -177,6 +177,30 @@ func (q *Queries) GetArticle(ctx context.Context, slug string) (GetArticleRow, e
 	return i, err
 }
 
+const getTags = `-- name: GetTags :many
+SELECT tag FROM tags
+`
+
+func (q *Queries) GetTags(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, getTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		items = append(items, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const unfavoriteArticle = `-- name: UnfavoriteArticle :one
 WITH article_id_cte AS (
     SELECT a.id

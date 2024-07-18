@@ -320,3 +320,12 @@ func (h *HandlerBase) UnfavoriteArticle(c *fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"article": resp})
 
 }
+
+func (h *HandlerBase) GetTags(c *fiber.Ctx) error {
+	tags, err := h.Queries.GetTags(c.Context())
+	if err != nil {
+		return err
+	}
+
+	return c.Status(200).JSON(fiber.Map{"tags": tags})
+}

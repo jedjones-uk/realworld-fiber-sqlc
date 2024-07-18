@@ -79,3 +79,6 @@ WHERE id = (SELECT article_id FROM delete_favorite)
 RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id;
 
 
+-- name: GetTags :many
+SELECT tag FROM tags;
+
