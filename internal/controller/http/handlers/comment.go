@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mitchellh/mapstructure"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 	"strconv"
 )
@@ -40,7 +40,6 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return err
 	}
-	fmt.Println(req.Comment.Body, slug, userID)
 
 	comment, err := h.Queries.CreateComment(c.Context(), sqlc.CreateCommentParams{
 		Slug:   slug,
@@ -48,17 +47,10 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 		UserID: pgtype.Int8{Int64: userID, Valid: true},
 	})
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
-	resp := CommentResp{}
-	resp.Comment.ID = int64(comment.ID)
-	resp.Comment.CreatedAt = comment.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00")
-	resp.Comment.UpdatedAt = comment.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00")
-	resp.Comment.Body = comment.Body
-
-	profile, err := h.Queries.GetProfileById(c.Context(), sqlc.GetProfileByIdParams{
+	author, err := h.Queries.GetUserProfileById(c.Context(), sqlc.GetUserProfileByIdParams{
 		ID:         userID,
 		FollowerID: userID,
 	})
@@ -66,12 +58,15 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 		return err
 	}
 
-	resp.Comment.Author.Username = profile.Username
-	resp.Comment.Author.Bio = profile.Bio.String
-	resp.Comment.Author.Image = profile.Image.String
-	resp.Comment.Author.Following = false
+	commentMap := make(map[string]interface{})
+	authorMap := make(map[string]interface{})
 
-	return c.JSON(fiber.Map{"comment": resp.Comment})
+	mapstructure.Decode(comment, &commentMap)
+	mapstructure.Decode(author, &authorMap)
+
+	commentMap["author"] = authorMap
+
+	return c.JSON(fiber.Map{"comment": commentMap})
 
 }
 
@@ -100,12 +95,36 @@ func (h *HandlerBase) DeleteComment(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
+type Comment struct {
+	ID        int32  `json:"id"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+	Body      string `json:"body"`
+	Author    Author `json:"author"`
+}
+
 func (h *HandlerBase) GetComments(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 
-	comments, err := h.Queries.GetCommentsByArticleSlug(c.Context(), slug)
+	commentsData, err := h.Queries.GetCommentsByArticleSlug(c.Context(), slug)
 	if err != nil {
 		return err
+	}
+
+	var comments []Comment
+	for _, comment := range commentsData {
+		comments = append(comments, Comment{
+			ID:        comment.ID,
+			CreatedAt: comment.CreatedAt,
+			UpdatedAt: comment.UpdatedAt,
+			Body:      comment.Body,
+			Author: Author{
+				Username:  comment.Username,
+				Bio:       comment.Bio.String,
+				Image:     comment.Image.String,
+				Following: comment.Following,
+			},
+		})
 	}
 
 	return c.JSON(fiber.Map{"comments": comments})

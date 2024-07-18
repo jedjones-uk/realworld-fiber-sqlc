@@ -9,6 +9,7 @@ sql:
       go:
         sql_package: "pgx/v5"
         emit_json_tags: true
+        json_tags_case_style: "camel"
         package: "sqlc"
         out: "usecase/dto/sqlc"
         emit_prepared_queries: false

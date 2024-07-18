@@ -1,30 +1,12 @@
 package handlers
 
 import (
-	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mitchellh/mapstructure"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 	"strings"
 )
-
-type SingleArticleResp struct {
-	Slug           string   `json:"slug"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Body           string   `json:"body"`
-	TagList        []string `json:"tagList"`
-	CreatedAt      string   `json:"createdAt"`
-	UpdatedAt      string   `json:"updatedAt"`
-	Favorited      bool     `json:"favorited"`
-	FavoritesCount int      `json:"favoritesCount"`
-	Author         struct {
-		Username  string `json:"username"`
-		Bio       string `json:"bio"`
-		Image     string `json:"image"`
-		Following bool   `json:"following"`
-	} `json:"author"`
-}
 
 type CreateArticleReq struct {
 	Article struct {
@@ -35,6 +17,33 @@ type CreateArticleReq struct {
 	} `json:"article"`
 }
 
+func formTagList(tagList interface{}) []string {
+	tags := []string{}
+	if tagList != nil {
+		tagList, ok := tagList.([]interface{})
+		if !ok {
+			return tags
+		}
+
+		for _, tag := range tagList {
+			if tag != nil {
+				tagStr, ok := tag.(string)
+				if !ok {
+					return tags
+				}
+				tags = append(tags, tagStr)
+			}
+		}
+	}
+	return tags
+}
+
+func transformString(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, " ", "-")
+	return s
+}
+
 func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	article, err := h.Queries.GetArticle(c.Context(), slug)
@@ -42,15 +51,15 @@ func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 		return err
 	}
 
-	userID := userIDFromToken(c)
 	var arg sqlc.GetUserProfileParams
+	userID := userIDFromToken(c)
 	if userID == 0 {
 		arg = sqlc.GetUserProfileParams{
-			Username: article.AuthorUsername,
+			Username: article.Username,
 		}
 	} else {
 		arg = sqlc.GetUserProfileParams{
-			Username:   article.AuthorUsername,
+			Username:   article.Username,
 			FollowerID: userID,
 		}
 	}
@@ -60,48 +69,20 @@ func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Initialize an empty slice of strings for tags
-	tags := []string{}
-	if article.TagList != nil {
-		tagList, ok := article.TagList.([]interface{})
-		if !ok {
-			return fmt.Errorf("failed to convert tagList to []interface{}")
-		}
+	tagList := formTagList(article.TagList)
 
-		for _, tag := range tagList {
-			if tag != nil {
-				tagStr, ok := tag.(string)
-				if !ok {
-					return fmt.Errorf("failed to convert tag to string")
-				}
-				tags = append(tags, tagStr)
-			}
-		}
-	}
-	fmt.Println(tags)
+	articleMap := make(map[string]interface{})
+	authorMap := make(map[string]interface{})
 
-	var resp SingleArticleResp
-	resp.Slug = article.Slug
-	resp.Title = article.Title
-	resp.Description = article.Description
-	resp.Body = article.Body
-	resp.TagList = tags
-	resp.CreatedAt = article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00")
-	resp.UpdatedAt = article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00")
-	resp.Favorited = article.Favorited
-	resp.FavoritesCount = int(article.FavoritesCount)
-	resp.Author.Username = author.Username
-	resp.Author.Bio = author.Bio.String
-	resp.Author.Image = author.Image.String
-	resp.Author.Following = author.Following
+	mapstructure.Decode(article, &articleMap)
+	mapstructure.Decode(author, &authorMap)
 
-	return c.Status(200).JSON(fiber.Map{"article": resp})
-}
+	articleMap["author"] = authorMap
+	articleMap["tagList"] = tagList
 
-func transformString(s string) string {
-	s = strings.ToLower(s)
-	s = strings.ReplaceAll(s, " ", "-")
-	return s
+	delete(articleMap, "username")
+
+	return c.Status(200).JSON(fiber.Map{"article": articleMap})
 }
 
 func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
@@ -123,45 +104,36 @@ func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 		Description: req.Article.Description,
 		Body:        req.Article.Body,
 		AuthorID:    pgtype.Int8{Int64: authorId},
+		Column6:     req.Article.TagList,
 	})
 	if err != nil {
 		return err
 	}
 
-	profile, err := h.Queries.GetProfileById(c.Context(), sqlc.GetProfileByIdParams{
-		ID: authorId,
+	author, err := h.Queries.GetUserProfileById(c.Context(), sqlc.GetUserProfileByIdParams{
+		ID:         authorId,
+		FollowerID: authorId,
 	})
 	if err != nil {
 		return err
 	}
 
-	// TODO taglist
+	articleMap := make(map[string]interface{})
+	authorMap := make(map[string]interface{})
 
-	resp := SingleArticleResp{
-		Slug:           article.Slug,
-		Title:          article.Title,
-		Description:    article.Description,
-		Body:           article.Body,
-		TagList:        []string{},
-		CreatedAt:      article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		Favorited:      false,
-		FavoritesCount: 0,
-	}
+	mapstructure.Decode(article, &articleMap)
+	mapstructure.Decode(author, &authorMap)
 
-	resp.Author.Username = profile.Username
-	resp.Author.Bio = profile.Bio.String
-	resp.Author.Image = profile.Image.String
-	resp.Author.Following = profile.Following
+	articleMap["author"] = authorMap
 
-	return c.Status(200).JSON(fiber.Map{
-		"article": resp,
-	})
+	return c.Status(200).JSON(
+		fiber.Map{
+			"article": articleMap,
+		})
 }
 
 func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 	userId := userIDFromToken(c)
-	fmt.Println("userId", userId)
 	if userId == 0 {
 		return c.Status(401).JSON(fiber.Map{"message": "Unauthorized"})
 	}
@@ -172,7 +144,6 @@ func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return err
 	}
-	fmt.Println("req", req.Article.Body)
 
 	newSlug := transformString(req.Article.Title)
 
@@ -188,32 +159,27 @@ func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 		return err
 	}
 
-	profile, err := h.Queries.GetProfileById(c.Context(), sqlc.GetProfileByIdParams{
-		ID: userId,
+	author, err := h.Queries.GetUserProfile(c.Context(), sqlc.GetUserProfileParams{
+		Username:   article.Username,
+		FollowerID: userId,
 	})
 	if err != nil {
 		return err
 	}
 
-	resp := SingleArticleResp{
-		Slug:           article.Slug,
-		Title:          article.Title,
-		Description:    article.Description,
-		Body:           article.Body,
-		TagList:        []string{},
-		CreatedAt:      article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		Favorited:      false,
-		FavoritesCount: 0,
-	}
-	resp.Author.Username = profile.Username
-	resp.Author.Bio = profile.Bio.String
-	resp.Author.Image = profile.Image.String
-	resp.Author.Following = profile.Following
+	articleMap := make(map[string]interface{})
+	authorMap := make(map[string]interface{})
 
-	return c.Status(200).JSON(fiber.Map{
-		"article": resp,
-	})
+	mapstructure.Decode(article, &articleMap)
+	mapstructure.Decode(author, &authorMap)
+
+	articleMap["author"] = authorMap
+	delete(articleMap, "username")
+
+	return c.Status(200).JSON(
+		fiber.Map{
+			"article": articleMap,
+		})
 
 }
 
@@ -252,30 +218,24 @@ func (h *HandlerBase) FavoriteArticle(c *fiber.Ctx) error {
 		return err
 	}
 
-	profile, err := h.Queries.GetProfileById(c.Context(), sqlc.GetProfileByIdParams{
-		ID: userId,
+	author, err := h.Queries.GetUserProfileById(c.Context(), sqlc.GetUserProfileByIdParams{
+		ID:         userId,
+		FollowerID: userId,
 	})
 	if err != nil {
 		return err
 	}
 
-	resp := SingleArticleResp{
-		Slug:           slug,
-		Title:          article.Title,
-		Description:    article.Description,
-		Body:           article.Body,
-		TagList:        []string{},
-		CreatedAt:      article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		Favorited:      true,
-		FavoritesCount: int(article.FavoritesCount),
-	}
-	resp.Author.Username = profile.Username
-	resp.Author.Bio = profile.Bio.String
-	resp.Author.Image = profile.Image.String
-	resp.Author.Following = profile.Following
+	articleMap := make(map[string]interface{})
+	authorMap := make(map[string]interface{})
 
-	return c.Status(200).JSON(fiber.Map{"article": resp})
+	mapstructure.Decode(article, &articleMap)
+	mapstructure.Decode(author, &authorMap)
+
+	articleMap["author"] = authorMap
+	delete(articleMap, "authorId")
+
+	return c.Status(200).JSON(fiber.Map{"article": articleMap})
 }
 
 func (h *HandlerBase) UnfavoriteArticle(c *fiber.Ctx) error {
@@ -294,30 +254,24 @@ func (h *HandlerBase) UnfavoriteArticle(c *fiber.Ctx) error {
 		return err
 	}
 
-	profile, err := h.Queries.GetProfileById(c.Context(), sqlc.GetProfileByIdParams{
-		ID: userId,
+	author, err := h.Queries.GetUserProfileById(c.Context(), sqlc.GetUserProfileByIdParams{
+		ID:         userId,
+		FollowerID: userId,
 	})
 	if err != nil {
 		return err
 	}
 
-	resp := SingleArticleResp{
-		Slug:           slug,
-		Title:          article.Title,
-		Description:    article.Description,
-		Body:           article.Body,
-		TagList:        []string{},
-		CreatedAt:      article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z07:00"),
-		Favorited:      true,
-		FavoritesCount: int(article.FavoritesCount),
-	}
-	resp.Author.Username = profile.Username
-	resp.Author.Bio = profile.Bio.String
-	resp.Author.Image = profile.Image.String
-	resp.Author.Following = profile.Following
+	articleMap := make(map[string]interface{})
+	authorMap := make(map[string]interface{})
 
-	return c.Status(200).JSON(fiber.Map{"article": resp})
+	mapstructure.Decode(article, &articleMap)
+	mapstructure.Decode(author, &authorMap)
+
+	articleMap["author"] = authorMap
+	delete(articleMap, "authorId")
+
+	return c.Status(200).JSON(fiber.Map{"article": articleMap})
 
 }
 
@@ -328,4 +282,14 @@ func (h *HandlerBase) GetTags(c *fiber.Ctx) error {
 	}
 
 	return c.Status(200).JSON(fiber.Map{"tags": tags})
+}
+
+func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
+	//tag := c.Query("tag")
+	//author := c.Query("author")
+	//favorited := c.Query("favorited")
+	//limit := c.Query("limit", "20")
+	//offset := c.Query("offset", "0")
+	return nil
+
 }

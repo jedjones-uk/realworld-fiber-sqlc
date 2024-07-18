@@ -26,14 +26,14 @@ RETURNING id, created_at, updated_at, body
 
 type CreateCommentParams struct {
 	Slug   string      `json:"slug"`
-	UserID pgtype.Int8 `json:"user_id"`
+	UserID pgtype.Int8 `json:"userId"`
 	Body   string      `json:"body"`
 }
 
 type CreateCommentRow struct {
 	ID        int32            `json:"id"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
-	UpdatedAt pgtype.Timestamp `json:"updated_at"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
 	Body      string           `json:"body"`
 }
 
@@ -57,7 +57,7 @@ WHERE id = $1 AND user_id = $2
 
 type DeleteCommentParams struct {
 	ID     int32       `json:"id"`
-	UserID pgtype.Int8 `json:"user_id"`
+	UserID pgtype.Int8 `json:"userId"`
 }
 
 func (q *Queries) DeleteComment(ctx context.Context, arg DeleteCommentParams) error {
@@ -68,8 +68,8 @@ func (q *Queries) DeleteComment(ctx context.Context, arg DeleteCommentParams) er
 const getCommentsByArticleSlug = `-- name: GetCommentsByArticleSlug :many
 SELECT
     c.id,
-    TO_CHAR(c.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS createdAt,
-    TO_CHAR(c.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updatedAt,
+    TO_CHAR(c.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+    TO_CHAR(c.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at,
     c.body,
     u.username,
     u.bio,
@@ -82,8 +82,8 @@ WHERE c.article_id = (SELECT id FROM articles WHERE slug = $1)
 
 type GetCommentsByArticleSlugRow struct {
 	ID        int32       `json:"id"`
-	Createdat string      `json:"createdat"`
-	Updatedat string      `json:"updatedat"`
+	CreatedAt string      `json:"createdAt"`
+	UpdatedAt string      `json:"updatedAt"`
 	Body      string      `json:"body"`
 	Username  string      `json:"username"`
 	Bio       pgtype.Text `json:"bio"`
@@ -102,8 +102,8 @@ func (q *Queries) GetCommentsByArticleSlug(ctx context.Context, slug string) ([]
 		var i GetCommentsByArticleSlugRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Createdat,
-			&i.Updatedat,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.Body,
 			&i.Username,
 			&i.Bio,

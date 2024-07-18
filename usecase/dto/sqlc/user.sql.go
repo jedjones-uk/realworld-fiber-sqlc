@@ -40,58 +40,12 @@ SELECT $2, id FROM followee
 
 type FollowUserParams struct {
 	Username   string `json:"username"`
-	FollowerID int64  `json:"follower_id"`
+	FollowerID int64  `json:"followerId"`
 }
 
 func (q *Queries) FollowUser(ctx context.Context, arg FollowUserParams) error {
 	_, err := q.db.Exec(ctx, followUser, arg.Username, arg.FollowerID)
 	return err
-}
-
-const getProfileById = `-- name: GetProfileById :one
-WITH profile_data AS (
-    SELECT
-        u.username,
-        u.bio,
-        u.image,
-        CASE
-            WHEN f.follower_id IS NOT NULL THEN true
-            ELSE false
-            END AS following
-    FROM users u
-             LEFT JOIN follows f ON u.id = f.followee_id AND f.follower_id = $2
-    WHERE u.id = $1
-)
-SELECT
-    username,
-    bio,
-    image,
-    COALESCE(following, false) AS following
-FROM profile_data
-`
-
-type GetProfileByIdParams struct {
-	ID         int64 `json:"id"`
-	FollowerID int64 `json:"follower_id"`
-}
-
-type GetProfileByIdRow struct {
-	Username  string      `json:"username"`
-	Bio       pgtype.Text `json:"bio"`
-	Image     pgtype.Text `json:"image"`
-	Following bool        `json:"following"`
-}
-
-func (q *Queries) GetProfileById(ctx context.Context, arg GetProfileByIdParams) (GetProfileByIdRow, error) {
-	row := q.db.QueryRow(ctx, getProfileById, arg.ID, arg.FollowerID)
-	var i GetProfileByIdRow
-	err := row.Scan(
-		&i.Username,
-		&i.Bio,
-		&i.Image,
-		&i.Following,
-	)
-	return i, err
 }
 
 const getUser = `-- name: GetUser :one
@@ -160,7 +114,7 @@ FROM profile_data
 
 type GetUserProfileParams struct {
 	Username   string `json:"username"`
-	FollowerID int64  `json:"follower_id"`
+	FollowerID int64  `json:"followerId"`
 }
 
 type GetUserProfileRow struct {
@@ -182,6 +136,52 @@ func (q *Queries) GetUserProfile(ctx context.Context, arg GetUserProfileParams) 
 	return i, err
 }
 
+const getUserProfileById = `-- name: GetUserProfileById :one
+WITH profile_data AS (
+    SELECT
+        u.username,
+        u.bio,
+        u.image,
+        CASE
+            WHEN f.follower_id IS NOT NULL THEN true
+            ELSE false
+            END AS following
+    FROM users u
+             LEFT JOIN follows f ON u.id = f.followee_id AND f.follower_id = $2
+    WHERE u.id = $1
+)
+SELECT
+    username,
+    bio,
+    image,
+    COALESCE(following, false) AS following
+FROM profile_data
+`
+
+type GetUserProfileByIdParams struct {
+	ID         int64 `json:"id"`
+	FollowerID int64 `json:"followerId"`
+}
+
+type GetUserProfileByIdRow struct {
+	Username  string      `json:"username"`
+	Bio       pgtype.Text `json:"bio"`
+	Image     pgtype.Text `json:"image"`
+	Following bool        `json:"following"`
+}
+
+func (q *Queries) GetUserProfileById(ctx context.Context, arg GetUserProfileByIdParams) (GetUserProfileByIdRow, error) {
+	row := q.db.QueryRow(ctx, getUserProfileById, arg.ID, arg.FollowerID)
+	var i GetUserProfileByIdRow
+	err := row.Scan(
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Following,
+	)
+	return i, err
+}
+
 const unfollowUser = `-- name: UnfollowUser :exec
 WITH followee AS (
     SELECT id FROM users WHERE username = $1
@@ -192,7 +192,7 @@ WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee)
 
 type UnfollowUserParams struct {
 	Username   string `json:"username"`
-	FollowerID int64  `json:"follower_id"`
+	FollowerID int64  `json:"followerId"`
 }
 
 func (q *Queries) UnfollowUser(ctx context.Context, arg UnfollowUserParams) error {

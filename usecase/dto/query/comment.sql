@@ -32,8 +32,8 @@ WHERE id = $1 AND user_id = $2;
 -- name: GetCommentsByArticleSlug :many
 SELECT
     c.id,
-    TO_CHAR(c.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS createdAt,
-    TO_CHAR(c.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updatedAt,
+    TO_CHAR(c.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+    TO_CHAR(c.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at,
     c.body,
     u.username,
     u.bio,

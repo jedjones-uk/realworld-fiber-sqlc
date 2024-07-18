@@ -14,34 +14,34 @@ type Article struct {
 	Title          string           `json:"title"`
 	Description    string           `json:"description"`
 	Body           string           `json:"body"`
-	CreatedAt      pgtype.Timestamp `json:"created_at"`
-	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
-	FavoritesCount int32            `json:"favorites_count"`
-	AuthorID       pgtype.Int8      `json:"author_id"`
+	CreatedAt      pgtype.Timestamp `json:"createdAt"`
+	UpdatedAt      pgtype.Timestamp `json:"updatedAt"`
+	FavoritesCount int32            `json:"favoritesCount"`
+	AuthorID       pgtype.Int8      `json:"authorId"`
 }
 
 type ArticleTag struct {
-	ArticleID int32 `json:"article_id"`
-	TagID     int32 `json:"tag_id"`
+	ArticleID int32 `json:"articleId"`
+	TagID     int32 `json:"tagId"`
 }
 
 type Comment struct {
 	ID        int32            `json:"id"`
-	ArticleID pgtype.Int4      `json:"article_id"`
-	UserID    pgtype.Int8      `json:"user_id"`
+	ArticleID pgtype.Int4      `json:"articleId"`
+	UserID    pgtype.Int8      `json:"userId"`
 	Body      string           `json:"body"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
-	UpdatedAt pgtype.Timestamp `json:"updated_at"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
 }
 
 type Favorite struct {
-	UserID    int64 `json:"user_id"`
-	ArticleID int32 `json:"article_id"`
+	UserID    int64 `json:"userId"`
+	ArticleID int32 `json:"articleId"`
 }
 
 type Follow struct {
-	FollowerID int64 `json:"follower_id"`
-	FolloweeID int64 `json:"followee_id"`
+	FollowerID int64 `json:"followerId"`
+	FolloweeID int64 `json:"followeeId"`
 }
 
 type Tag struct {

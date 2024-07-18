@@ -13,7 +13,7 @@ SET email    = CASE WHEN @email::text IS NOT NULL AND @email::text <> '' THEN @e
     image    = CASE WHEN @image::text IS NOT NULL AND @image::text <> '' THEN @image::text ELSE image END,
     bio      = CASE WHEN @bio::text IS NOT NULL AND @bio::text <> '' THEN @bio::text ELSE bio END
 WHERE id = $1
-RETURNING *;
+RETURNING ;
 
 
 -- name: GetUserByEmail :one
@@ -47,21 +47,7 @@ SELECT
     COALESCE(following, false) AS following
 FROM profile_data;
 
--- name: FollowUser :exec
-WITH followee AS (
-    SELECT id FROM users WHERE username = $1
-)
-INSERT INTO follows (follower_id, followee_id)
-SELECT $2, id FROM followee;
-
--- name: UnfollowUser :exec
-WITH followee AS (
-    SELECT id FROM users WHERE username = $1
-)
-DELETE FROM follows
-WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee);
-
--- name: GetProfileById :one
+-- name: GetUserProfileById :one
 WITH profile_data AS (
     SELECT
         u.username,
@@ -81,3 +67,17 @@ SELECT
     image,
     COALESCE(following, false) AS following
 FROM profile_data;
+
+-- name: FollowUser :exec
+WITH followee AS (
+    SELECT id FROM users WHERE username = $1
+)
+INSERT INTO follows (follower_id, followee_id)
+SELECT $2, id FROM followee;
+
+-- name: UnfollowUser :exec
+WITH followee AS (
+    SELECT id FROM users WHERE username = $1
+)
+DELETE FROM follows
+WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee);

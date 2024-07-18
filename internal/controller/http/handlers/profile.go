@@ -14,6 +14,13 @@ type ProfileResp struct {
 	} `json:"profile"`
 }
 
+type Author struct {
+	Username  string `json:"username"`
+	Bio       string `json:"bio"`
+	Image     string `json:"image"`
+	Following bool   `json:"following"`
+}
+
 func (h *HandlerBase) GetProfile(c *fiber.Ctx) error {
 	username := c.Params("username")
 	userID := userIDFromToken(c)

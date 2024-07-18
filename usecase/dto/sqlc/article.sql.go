@@ -12,9 +12,45 @@ import (
 )
 
 const createArticle = `-- name: CreateArticle :one
-INSERT INTO articles (slug, title, description, body, author_id)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
+WITH inserted_article AS (
+    INSERT INTO articles (slug, title, description, body, author_id)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count
+),
+     inserted_tags AS (
+         INSERT INTO tags (tag)
+             SELECT unnest($6::text[])
+             ON CONFLICT (tag) DO NOTHING
+             RETURNING id, tag
+     ),
+     tag_ids AS (
+         SELECT id
+         FROM tags
+         WHERE tag = ANY ($6::text[])
+     ),
+     inserted_article_tags AS (
+         INSERT INTO article_tags (article_id, tag_id)
+             SELECT inserted_article.id, tag_ids.id
+             FROM inserted_article, tag_ids
+     )
+SELECT
+    inserted_article.slug,
+    inserted_article.title,
+    inserted_article.description,
+    inserted_article.body,
+    array_agg(tag.tag) AS tag_list,
+    to_char(inserted_article.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
+    to_char(inserted_article.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
+    false AS favorited,
+    inserted_article.favorites_count as favorites_count
+FROM
+    inserted_article
+        JOIN
+    article_tags ON inserted_article.id = article_tags.article_id
+        JOIN
+    tags AS tag ON article_tags.tag_id = tag.id
+GROUP BY
+    inserted_article.id
 `
 
 type CreateArticleParams struct {
@@ -22,28 +58,42 @@ type CreateArticleParams struct {
 	Title       string      `json:"title"`
 	Description string      `json:"description"`
 	Body        string      `json:"body"`
-	AuthorID    pgtype.Int8 `json:"author_id"`
+	AuthorID    pgtype.Int8 `json:"authorId"`
+	Column6     []string    `json:"column6"`
 }
 
-func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (Article, error) {
+type CreateArticleRow struct {
+	Slug           string      `json:"slug"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Body           string      `json:"body"`
+	TagList        interface{} `json:"tagList"`
+	CreatedAt      string      `json:"createdAt"`
+	UpdatedAt      string      `json:"updatedAt"`
+	Favorited      bool        `json:"favorited"`
+	FavoritesCount int32       `json:"favoritesCount"`
+}
+
+func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (CreateArticleRow, error) {
 	row := q.db.QueryRow(ctx, createArticle,
 		arg.Slug,
 		arg.Title,
 		arg.Description,
 		arg.Body,
 		arg.AuthorID,
+		arg.Column6,
 	)
-	var i Article
+	var i CreateArticleRow
 	err := row.Scan(
-		&i.ID,
 		&i.Slug,
 		&i.Title,
 		&i.Description,
 		&i.Body,
+		&i.TagList,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Favorited,
 		&i.FavoritesCount,
-		&i.AuthorID,
 	)
 	return i, err
 }
@@ -56,7 +106,7 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 
 type DeleteArticleParams struct {
 	Slug     string      `json:"slug"`
-	AuthorID pgtype.Int8 `json:"author_id"`
+	AuthorID pgtype.Int8 `json:"authorId"`
 }
 
 func (q *Queries) DeleteArticle(ctx context.Context, arg DeleteArticleParams) (Article, error) {
@@ -95,7 +145,7 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 
 type FavoriteArticleParams struct {
 	Slug   string `json:"slug"`
-	UserID int64  `json:"user_id"`
+	UserID int64  `json:"userId"`
 }
 
 func (q *Queries) FavoriteArticle(ctx context.Context, arg FavoriteArticleParams) (Article, error) {
@@ -125,9 +175,7 @@ SELECT
     a.created_at,
     a.updated_at,
     a.favorites_count,
-    u.username AS author_username,
-    u.bio AS author_bio,
-    u.image AS author_image,
+    u.username AS username,
     ARRAY_AGG(t.tag) AS tag_list,
     (CASE WHEN EXISTS (SELECT 1 FROM favorites f WHERE f.article_id = a.id) THEN TRUE ELSE FALSE END) AS favorited
 FROM
@@ -146,13 +194,11 @@ type GetArticleRow struct {
 	Title          string           `json:"title"`
 	Description    string           `json:"description"`
 	Body           string           `json:"body"`
-	CreatedAt      pgtype.Timestamp `json:"created_at"`
-	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
-	FavoritesCount int32            `json:"favorites_count"`
-	AuthorUsername string           `json:"author_username"`
-	AuthorBio      pgtype.Text      `json:"author_bio"`
-	AuthorImage    pgtype.Text      `json:"author_image"`
-	TagList        interface{}      `json:"tag_list"`
+	CreatedAt      pgtype.Timestamp `json:"createdAt"`
+	UpdatedAt      pgtype.Timestamp `json:"updatedAt"`
+	FavoritesCount int32            `json:"favoritesCount"`
+	Username       string           `json:"username"`
+	TagList        interface{}      `json:"tagList"`
 	Favorited      bool             `json:"favorited"`
 }
 
@@ -168,9 +214,7 @@ func (q *Queries) GetArticle(ctx context.Context, slug string) (GetArticleRow, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.FavoritesCount,
-		&i.AuthorUsername,
-		&i.AuthorBio,
-		&i.AuthorImage,
+		&i.Username,
 		&i.TagList,
 		&i.Favorited,
 	)
@@ -219,7 +263,7 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 
 type UnfavoriteArticleParams struct {
 	Slug   string `json:"slug"`
-	UserID int64  `json:"user_id"`
+	UserID int64  `json:"userId"`
 }
 
 func (q *Queries) UnfavoriteArticle(ctx context.Context, arg UnfavoriteArticleParams) (Article, error) {
@@ -240,26 +284,62 @@ func (q *Queries) UnfavoriteArticle(ctx context.Context, arg UnfavoriteArticlePa
 }
 
 const updateArticle = `-- name: UpdateArticle :one
-UPDATE articles
-SET slug        = CASE WHEN $3::text IS NOT NULL AND $3::text <> '' THEN $3::text ELSE slug END,
-    title       = CASE WHEN $4::text IS NOT NULL AND $4::text <> '' THEN $4::text ELSE title END,
-    description = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE description END,
-    body        = CASE WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text ELSE body END,
-    updated_at  = CURRENT_TIMESTAMP
-WHERE slug = $1 and author_id = $2
-RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
+WITH updated_article AS (
+    UPDATE articles
+        SET slug        = CASE WHEN $3::text IS NOT NULL AND $3::text <> '' THEN $3::text ELSE slug END,
+            title       = CASE WHEN $4::text IS NOT NULL AND $4::text <> '' THEN $4::text ELSE title END,
+            description = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE description END,
+            body        = CASE WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text ELSE body END,
+            updated_at  = CURRENT_TIMESTAMP
+        WHERE slug = $1 and author_id = $2
+        RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
+)
+SELECT
+    ua.slug,
+    ua.title,
+    ua.description,
+    ua.body,
+    to_char(ua.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
+    to_char(ua.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
+    ua.favorites_count AS favorites_count,
+    u.username,
+    (CASE WHEN EXISTS (SELECT 1 FROM favorites f WHERE f.article_id = ua.id) THEN TRUE ELSE FALSE END) AS favorited,
+    ARRAY_AGG(t.tag) AS tagList
+FROM
+    updated_article ua
+        JOIN
+    users u ON ua.author_id = u.id
+        LEFT JOIN
+    article_tags at ON ua.id = at.article_id
+        LEFT JOIN
+    tags t ON at.tag_id = t.id
+GROUP BY
+    ua.id, u.id
 `
 
 type UpdateArticleParams struct {
 	Slug        string      `json:"slug"`
-	AuthorID    pgtype.Int8 `json:"author_id"`
-	Slug_2      string      `json:"slug_2"`
+	AuthorID    pgtype.Int8 `json:"authorId"`
+	Slug_2      string      `json:"slug2"`
 	Title       string      `json:"title"`
 	Description string      `json:"description"`
 	Body        string      `json:"body"`
 }
 
-func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (Article, error) {
+type UpdateArticleRow struct {
+	Slug           string      `json:"slug"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Body           string      `json:"body"`
+	CreatedAt      string      `json:"createdAt"`
+	UpdatedAt      string      `json:"updatedAt"`
+	FavoritesCount int32       `json:"favoritesCount"`
+	Username       string      `json:"username"`
+	Favorited      bool        `json:"favorited"`
+	Taglist        interface{} `json:"taglist"`
+}
+
+func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (UpdateArticleRow, error) {
 	row := q.db.QueryRow(ctx, updateArticle,
 		arg.Slug,
 		arg.AuthorID,
@@ -268,9 +348,8 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 		arg.Description,
 		arg.Body,
 	)
-	var i Article
+	var i UpdateArticleRow
 	err := row.Scan(
-		&i.ID,
 		&i.Slug,
 		&i.Title,
 		&i.Description,
@@ -278,7 +357,9 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (A
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.FavoritesCount,
-		&i.AuthorID,
+		&i.Username,
+		&i.Favorited,
+		&i.Taglist,
 	)
 	return i, err
 }
