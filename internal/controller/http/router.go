@@ -49,15 +49,14 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 	articlesRoute.Post("/", middleware.Protected(), handlerBase.CreateArticle)
 	articlesRoute.Put("/:slug", middleware.Protected(), handlerBase.UpdateArticle)
 	articlesRoute.Delete("/:slug", middleware.Protected(), handlerBase.DeleteArticle)
-	//
+
 	//comments
-	//
+
 	commentsRoute := articlesRoute.Group("/:slug/comments")
-	//commentsRoute := articlesRoute.Group("/:slug/comments")
 	commentsRoute.Post("/", middleware.Protected(), handlerBase.CreateComment)
-	//commentsRoute.Get("/")
-	//commentsRoute.Delete("/:id")
-	//
+	commentsRoute.Get("/", handlerBase.GetComments)
+	commentsRoute.Delete("/:id", middleware.Protected(), handlerBase.DeleteComment)
+
 	//ffv
 	app.Post("/api/articles/:slug/favorite", middleware.Protected(), handlerBase.FavoriteArticle)
 	app.Delete("/api/articles/:slug/favorite", middleware.Protected(), handlerBase.UnfavoriteArticle)

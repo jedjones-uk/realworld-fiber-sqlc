@@ -9,51 +9,51 @@ import (
 )
 
 type Article struct {
-	ID             int32
-	Slug           string
-	Title          string
-	Description    string
-	Body           string
-	CreatedAt      pgtype.Timestamp
-	UpdatedAt      pgtype.Timestamp
-	FavoritesCount int32
-	AuthorID       pgtype.Int8
+	ID             int32            `json:"id"`
+	Slug           string           `json:"slug"`
+	Title          string           `json:"title"`
+	Description    string           `json:"description"`
+	Body           string           `json:"body"`
+	CreatedAt      pgtype.Timestamp `json:"created_at"`
+	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
+	FavoritesCount int32            `json:"favorites_count"`
+	AuthorID       pgtype.Int8      `json:"author_id"`
 }
 
 type ArticleTag struct {
-	ArticleID int32
-	TagID     int32
+	ArticleID int32 `json:"article_id"`
+	TagID     int32 `json:"tag_id"`
 }
 
 type Comment struct {
-	ID        int32
-	ArticleID pgtype.Int4
-	UserID    pgtype.Int8
-	Body      string
-	CreatedAt pgtype.Timestamp
-	UpdatedAt pgtype.Timestamp
+	ID        int32            `json:"id"`
+	ArticleID pgtype.Int4      `json:"article_id"`
+	UserID    pgtype.Int8      `json:"user_id"`
+	Body      string           `json:"body"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+	UpdatedAt pgtype.Timestamp `json:"updated_at"`
 }
 
 type Favorite struct {
-	UserID    int64
-	ArticleID int32
+	UserID    int64 `json:"user_id"`
+	ArticleID int32 `json:"article_id"`
 }
 
 type Follow struct {
-	FollowerID int64
-	FolloweeID int64
+	FollowerID int64 `json:"follower_id"`
+	FolloweeID int64 `json:"followee_id"`
 }
 
 type Tag struct {
-	ID  int32
-	Tag string
+	ID  int32  `json:"id"`
+	Tag string `json:"tag"`
 }
 
 type User struct {
-	ID       int64
-	Email    string
-	Username string
-	Password string
-	Bio      pgtype.Text
-	Image    pgtype.Text
+	ID       int64       `json:"id"`
+	Email    string      `json:"email"`
+	Username string      `json:"username"`
+	Password string      `json:"password"`
+	Bio      pgtype.Text `json:"bio"`
+	Image    pgtype.Text `json:"image"`
 }

@@ -18,9 +18,9 @@ RETURNING id
 `
 
 type CreateUserParams struct {
-	Email    string
-	Username string
-	Password string
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, error) {
@@ -39,8 +39,8 @@ SELECT $2, id FROM followee
 `
 
 type FollowUserParams struct {
-	Username   string
-	FollowerID int64
+	Username   string `json:"username"`
+	FollowerID int64  `json:"follower_id"`
 }
 
 func (q *Queries) FollowUser(ctx context.Context, arg FollowUserParams) error {
@@ -71,15 +71,15 @@ FROM profile_data
 `
 
 type GetProfileByIdParams struct {
-	ID         int64
-	FollowerID int64
+	ID         int64 `json:"id"`
+	FollowerID int64 `json:"follower_id"`
 }
 
 type GetProfileByIdRow struct {
-	Username  string
-	Bio       pgtype.Text
-	Image     pgtype.Text
-	Following bool
+	Username  string      `json:"username"`
+	Bio       pgtype.Text `json:"bio"`
+	Image     pgtype.Text `json:"image"`
+	Following bool        `json:"following"`
 }
 
 func (q *Queries) GetProfileById(ctx context.Context, arg GetProfileByIdParams) (GetProfileByIdRow, error) {
@@ -159,15 +159,15 @@ FROM profile_data
 `
 
 type GetUserProfileParams struct {
-	Username   string
-	FollowerID int64
+	Username   string `json:"username"`
+	FollowerID int64  `json:"follower_id"`
 }
 
 type GetUserProfileRow struct {
-	Username  string
-	Bio       pgtype.Text
-	Image     pgtype.Text
-	Following bool
+	Username  string      `json:"username"`
+	Bio       pgtype.Text `json:"bio"`
+	Image     pgtype.Text `json:"image"`
+	Following bool        `json:"following"`
 }
 
 func (q *Queries) GetUserProfile(ctx context.Context, arg GetUserProfileParams) (GetUserProfileRow, error) {
@@ -191,8 +191,8 @@ WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee)
 `
 
 type UnfollowUserParams struct {
-	Username   string
-	FollowerID int64
+	Username   string `json:"username"`
+	FollowerID int64  `json:"follower_id"`
 }
 
 func (q *Queries) UnfollowUser(ctx context.Context, arg UnfollowUserParams) error {
@@ -212,12 +212,12 @@ RETURNING id, email, username, password, bio, image
 `
 
 type UpdateUserParams struct {
-	ID       int64
-	Email    string
-	Username string
-	Password string
-	Image    string
-	Bio      string
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Image    string `json:"image"`
+	Bio      string `json:"bio"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {

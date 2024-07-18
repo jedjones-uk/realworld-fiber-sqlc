@@ -1,26 +1,44 @@
 -- comment.sql
 
 -- name: CreateComment :one
-WITH article_id_cte AS (
-    SELECT a.id
-    FROM articles a
-    WHERE a.slug = $1
-), insert_comment AS (
-    INSERT INTO comments (body, user_id, article_id)
-        SELECT $2, $3, id
-        FROM article_id_cte
-        RETURNING id, body, user_id, article_id, created_at
-)
+INSERT INTO comments (article_id, user_id, body, created_at, updated_at)
+VALUES (
+           (SELECT id FROM articles WHERE slug = $1),
+           $2,
+           $3,
+           TO_TIMESTAMP(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+           TO_TIMESTAMP(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+       )
+RETURNING id, created_at, updated_at, body;
+
+-- name: GetSingleComment :one
 SELECT
-    c.id AS comment_id,
-    c.body AS comment_body,
-    c.article_id AS comment_article_id,
-    c.created_at AS comment_created_at,
-    c.updated_at AS comment_updated_at,
-    u.username AS user_username,
-    u.image AS user_image,
-    u.bio AS user_bio
+    c.id,
+    c.created_at AS createdAt,
+    c.updated_at AS updatedAt,
+    c.body,
+    u.username,
+    u.bio,
+    u.image,
+    FALSE AS following  -- заменить на реальную логику определения, следует ли автору
 FROM comments c
-         JOIN articles a ON c.article_id = a.id
          JOIN users u ON c.user_id = u.id
-WHERE c.id = (SELECT id FROM insert_comment);
+WHERE c.id = (SELECT MAX(id) FROM comments);
+
+-- name: DeleteComment :exec
+DELETE FROM comments
+WHERE id = $1 AND user_id = $2;
+
+-- name: GetCommentsByArticleSlug :many
+SELECT
+    c.id,
+    TO_CHAR(c.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS createdAt,
+    TO_CHAR(c.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updatedAt,
+    c.body,
+    u.username,
+    u.bio,
+    u.image,
+    FALSE AS following
+FROM comments c
+         JOIN users u ON c.user_id = u.id
+WHERE c.article_id = (SELECT id FROM articles WHERE slug = $1);

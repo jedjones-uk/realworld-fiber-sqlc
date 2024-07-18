@@ -18,11 +18,11 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 `
 
 type CreateArticleParams struct {
-	Slug        string
-	Title       string
-	Description string
-	Body        string
-	AuthorID    pgtype.Int8
+	Slug        string      `json:"slug"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Body        string      `json:"body"`
+	AuthorID    pgtype.Int8 `json:"author_id"`
 }
 
 func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (Article, error) {
@@ -55,8 +55,8 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 `
 
 type DeleteArticleParams struct {
-	Slug     string
-	AuthorID pgtype.Int8
+	Slug     string      `json:"slug"`
+	AuthorID pgtype.Int8 `json:"author_id"`
 }
 
 func (q *Queries) DeleteArticle(ctx context.Context, arg DeleteArticleParams) (Article, error) {
@@ -94,8 +94,8 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 `
 
 type FavoriteArticleParams struct {
-	Slug   string
-	UserID int64
+	Slug   string `json:"slug"`
+	UserID int64  `json:"user_id"`
 }
 
 func (q *Queries) FavoriteArticle(ctx context.Context, arg FavoriteArticleParams) (Article, error) {
@@ -142,18 +142,18 @@ GROUP BY
 `
 
 type GetArticleRow struct {
-	Slug           string
-	Title          string
-	Description    string
-	Body           string
-	CreatedAt      pgtype.Timestamp
-	UpdatedAt      pgtype.Timestamp
-	FavoritesCount int32
-	AuthorUsername string
-	AuthorBio      pgtype.Text
-	AuthorImage    pgtype.Text
-	TagList        interface{}
-	Favorited      bool
+	Slug           string           `json:"slug"`
+	Title          string           `json:"title"`
+	Description    string           `json:"description"`
+	Body           string           `json:"body"`
+	CreatedAt      pgtype.Timestamp `json:"created_at"`
+	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
+	FavoritesCount int32            `json:"favorites_count"`
+	AuthorUsername string           `json:"author_username"`
+	AuthorBio      pgtype.Text      `json:"author_bio"`
+	AuthorImage    pgtype.Text      `json:"author_image"`
+	TagList        interface{}      `json:"tag_list"`
+	Favorited      bool             `json:"favorited"`
 }
 
 // article.sql
@@ -218,8 +218,8 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 `
 
 type UnfavoriteArticleParams struct {
-	Slug   string
-	UserID int64
+	Slug   string `json:"slug"`
+	UserID int64  `json:"user_id"`
 }
 
 func (q *Queries) UnfavoriteArticle(ctx context.Context, arg UnfavoriteArticleParams) (Article, error) {
@@ -251,12 +251,12 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 `
 
 type UpdateArticleParams struct {
-	Slug        string
-	AuthorID    pgtype.Int8
-	Slug_2      string
-	Title       string
-	Description string
-	Body        string
+	Slug        string      `json:"slug"`
+	AuthorID    pgtype.Int8 `json:"author_id"`
+	Slug_2      string      `json:"slug_2"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Body        string      `json:"body"`
 }
 
 func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (Article, error) {
