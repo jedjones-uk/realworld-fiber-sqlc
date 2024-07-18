@@ -14,7 +14,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, username, password)
 VALUES ($1, $2, $3)
-RETURNING id
+RETURNING id, email, username, password, bio, image
 `
 
 type CreateUserParams struct {
@@ -23,11 +23,18 @@ type CreateUserParams struct {
 	Password string `json:"password"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, error) {
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Username, arg.Password)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.Password,
+		&i.Bio,
+		&i.Image,
+	)
+	return i, err
 }
 
 const followUser = `-- name: FollowUser :exec
@@ -50,22 +57,27 @@ func (q *Queries) FollowUser(ctx context.Context, arg FollowUserParams) error {
 
 const getUser = `-- name: GetUser :one
 
-SELECT id, email, username, password, bio, image
+SELECT email, bio, image, username
 FROM users
 WHERE id = $1
 `
 
+type GetUserRow struct {
+	Email    string      `json:"email"`
+	Bio      pgtype.Text `json:"bio"`
+	Image    pgtype.Text `json:"image"`
+	Username string      `json:"username"`
+}
+
 // user.sql
-func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
+func (q *Queries) GetUser(ctx context.Context, id int64) (GetUserRow, error) {
 	row := q.db.QueryRow(ctx, getUser, id)
-	var i User
+	var i GetUserRow
 	err := row.Scan(
-		&i.ID,
 		&i.Email,
-		&i.Username,
-		&i.Password,
 		&i.Bio,
 		&i.Image,
+		&i.Username,
 	)
 	return i, err
 }
@@ -208,7 +220,7 @@ SET email    = CASE WHEN $2::text IS NOT NULL AND $2::text <> '' THEN $2::text E
     image    = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE image END,
     bio      = CASE WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text ELSE bio END
 WHERE id = $1
-RETURNING id, email, username, password, bio, image
+RETURNING email, bio, image, username
 `
 
 type UpdateUserParams struct {
@@ -220,7 +232,14 @@ type UpdateUserParams struct {
 	Bio      string `json:"bio"`
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+type UpdateUserRow struct {
+	Email    string      `json:"email"`
+	Bio      pgtype.Text `json:"bio"`
+	Image    pgtype.Text `json:"image"`
+	Username string      `json:"username"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
 	row := q.db.QueryRow(ctx, updateUser,
 		arg.ID,
 		arg.Email,
@@ -229,14 +248,12 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.Image,
 		arg.Bio,
 	)
-	var i User
+	var i UpdateUserRow
 	err := row.Scan(
-		&i.ID,
 		&i.Email,
-		&i.Username,
-		&i.Password,
 		&i.Bio,
 		&i.Image,
+		&i.Username,
 	)
 	return i, err
 }

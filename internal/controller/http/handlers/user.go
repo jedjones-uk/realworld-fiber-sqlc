@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/mitchellh/mapstructure"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
@@ -34,15 +34,15 @@ func (h *HandlerBase) CurrentUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	resp := CurrentUserResp{
-		Email:    user.Email,
-		Username: user.Username,
-		Bio:      user.Bio.String,
-		Image:    user.Image.String,
-		Token:    c.Locals("user").(*jwt.Token).Raw,
-	}
+	token := c.Locals("user").(*jwt.Token).Raw
 
-	return c.Status(200).JSON(fiber.Map{"user": resp})
+	userMap := make(map[string]interface{})
+
+	mapstructure.Decode(user, &userMap)
+
+	userMap["token"] = token
+
+	return c.Status(200).JSON(fiber.Map{"user": userMap})
 }
 
 func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
@@ -54,29 +54,28 @@ func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
 		return err
 	}
 
-	fmt.Println(params.User.Bio)
-
-	updateProfileParams := sqlc.UpdateUserParams{
+	user, err := h.Queries.UpdateUser(c.Context(), sqlc.UpdateUserParams{
 		ID:       id,
 		Email:    params.User.Email,
 		Username: params.User.Username,
 		Password: params.User.Password,
 		Bio:      params.User.Bio,
 		Image:    params.User.Image,
-	}
-
-	user, err := h.Queries.UpdateUser(c.Context(), updateProfileParams)
+	})
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	resp := CurrentUserResp{
-		Email:    user.Email,
-		Username: user.Username,
-		Bio:      user.Bio.String,
-		Image:    user.Image.String,
-		Token:    c.Locals("user").(*jwt.Token).Raw,
-	}
+	token := c.Locals("user").(*jwt.Token).Raw
 
-	return c.Status(200).JSON(fiber.Map{"user": resp})
+	userMap := make(map[string]interface{})
+
+	mapstructure.Decode(user, &userMap)
+
+	userMap["token"] = token
+
+	return c.Status(200).JSON(
+		fiber.Map{
+			"user": userMap,
+		})
 }

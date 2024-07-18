@@ -42,13 +42,7 @@ func (h *HandlerBase) GetProfile(c *fiber.Ctx) error {
 		return err
 	}
 
-	var resp ProfileResp
-	resp.Profile.Username = profile.Username
-	resp.Profile.Bio = profile.Bio.String
-	resp.Profile.Image = profile.Image.String
-	resp.Profile.Following = profile.Following
-
-	return c.Status(200).JSON(resp)
+	return c.Status(200).JSON(fiber.Map{"profile": profile})
 
 }
 
@@ -72,13 +66,9 @@ func (h *HandlerBase) Follow(c *fiber.Ctx) error {
 		return err
 	}
 
-	var resp ProfileResp
-	resp.Profile.Username = profile.Username
-	resp.Profile.Bio = profile.Bio.String
-	resp.Profile.Image = profile.Image.String
-	resp.Profile.Following = profile.Following
-
-	return c.Status(200).JSON(resp)
+	return c.Status(200).JSON(fiber.Map{
+		"profile": profile,
+	})
 }
 
 func (h *HandlerBase) Unfollow(c *fiber.Ctx) error {
@@ -101,11 +91,7 @@ func (h *HandlerBase) Unfollow(c *fiber.Ctx) error {
 		return err
 	}
 
-	var resp ProfileResp
-	resp.Profile.Username = profile.Username
-	resp.Profile.Bio = profile.Bio.String
-	resp.Profile.Image = profile.Image.String
-	resp.Profile.Following = profile.Following
-
-	return c.Status(200).JSON(resp)
+	return c.Status(200).JSON(fiber.Map{
+		"profile": profile,
+	})
 }

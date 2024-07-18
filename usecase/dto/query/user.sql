@@ -1,7 +1,7 @@
 -- user.sql
 
 -- name: GetUser :one
-SELECT *
+SELECT email, bio, image, username
 FROM users
 WHERE id = $1;
 
@@ -13,7 +13,7 @@ SET email    = CASE WHEN @email::text IS NOT NULL AND @email::text <> '' THEN @e
     image    = CASE WHEN @image::text IS NOT NULL AND @image::text <> '' THEN @image::text ELSE image END,
     bio      = CASE WHEN @bio::text IS NOT NULL AND @bio::text <> '' THEN @bio::text ELSE bio END
 WHERE id = $1
-RETURNING ;
+RETURNING email, bio, image, username;
 
 
 -- name: GetUserByEmail :one
@@ -24,7 +24,7 @@ WHERE email = $1;
 -- name: CreateUser :one
 INSERT INTO users (email, username, password)
 VALUES ($1, $2, $3)
-RETURNING id;
+RETURNING *;
 
 -- name: GetUserProfile :one
 WITH profile_data AS (
