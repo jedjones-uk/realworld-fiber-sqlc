@@ -23,7 +23,7 @@ type CreateUserParams struct {
 	Password string `json:"password"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Username, arg.Password)
 	var i User
 	err := row.Scan(
@@ -50,7 +50,7 @@ type FollowUserParams struct {
 	FollowerID int64  `json:"followerId"`
 }
 
-func (q *Queries) FollowUser(ctx context.Context, arg FollowUserParams) error {
+func (q *Queries) FollowUser(ctx context.Context, arg *FollowUserParams) error {
 	_, err := q.db.Exec(ctx, followUser, arg.Username, arg.FollowerID)
 	return err
 }
@@ -136,7 +136,7 @@ type GetUserProfileRow struct {
 	Following bool        `json:"following"`
 }
 
-func (q *Queries) GetUserProfile(ctx context.Context, arg GetUserProfileParams) (GetUserProfileRow, error) {
+func (q *Queries) GetUserProfile(ctx context.Context, arg *GetUserProfileParams) (GetUserProfileRow, error) {
 	row := q.db.QueryRow(ctx, getUserProfile, arg.Username, arg.FollowerID)
 	var i GetUserProfileRow
 	err := row.Scan(
@@ -182,7 +182,7 @@ type GetUserProfileByIdRow struct {
 	Following bool        `json:"following"`
 }
 
-func (q *Queries) GetUserProfileById(ctx context.Context, arg GetUserProfileByIdParams) (GetUserProfileByIdRow, error) {
+func (q *Queries) GetUserProfileById(ctx context.Context, arg *GetUserProfileByIdParams) (GetUserProfileByIdRow, error) {
 	row := q.db.QueryRow(ctx, getUserProfileById, arg.ID, arg.FollowerID)
 	var i GetUserProfileByIdRow
 	err := row.Scan(
@@ -207,7 +207,7 @@ type UnfollowUserParams struct {
 	FollowerID int64  `json:"followerId"`
 }
 
-func (q *Queries) UnfollowUser(ctx context.Context, arg UnfollowUserParams) error {
+func (q *Queries) UnfollowUser(ctx context.Context, arg *UnfollowUserParams) error {
 	_, err := q.db.Exec(ctx, unfollowUser, arg.Username, arg.FollowerID)
 	return err
 }
@@ -239,7 +239,7 @@ type UpdateUserRow struct {
 	Username string      `json:"username"`
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
+func (q *Queries) UpdateUser(ctx context.Context, arg *UpdateUserParams) (UpdateUserRow, error) {
 	row := q.db.QueryRow(ctx, updateUser,
 		arg.ID,
 		arg.Email,

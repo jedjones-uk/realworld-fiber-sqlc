@@ -54,7 +54,7 @@ func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
 		return err
 	}
 
-	user, err := h.Queries.UpdateUser(c.Context(), sqlc.UpdateUserParams{
+	user, err := h.Queries.UpdateUser(c.Context(), &sqlc.UpdateUserParams{
 		ID:       id,
 		Email:    params.User.Email,
 		Username: params.User.Username,

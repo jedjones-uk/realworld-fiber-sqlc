@@ -37,7 +37,7 @@ func (h *HandlerBase) GetProfile(c *fiber.Ctx) error {
 		}
 	}
 
-	profile, err := h.Queries.GetUserProfile(c.Context(), arg)
+	profile, err := h.Queries.GetUserProfile(c.Context(), &arg)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (h *HandlerBase) Follow(c *fiber.Ctx) error {
 	username := c.Params("username")
 	userID := userIDFromToken(c)
 
-	err := h.Queries.FollowUser(c.Context(), sqlc.FollowUserParams{
+	err := h.Queries.FollowUser(c.Context(), &sqlc.FollowUserParams{
 		Username:   username,
 		FollowerID: userID,
 	})
@@ -58,13 +58,14 @@ func (h *HandlerBase) Follow(c *fiber.Ctx) error {
 		return err
 	}
 
-	profile, err := h.Queries.GetUserProfile(c.Context(), sqlc.GetUserProfileParams{
+	profile, err := h.Queries.GetUserProfile(c.Context(), &sqlc.GetUserProfileParams{
 		Username:   username,
 		FollowerID: userID,
 	})
 	if err != nil {
 		return err
 	}
+	profile.Following = true
 
 	return c.Status(200).JSON(fiber.Map{
 		"profile": profile,
@@ -75,7 +76,7 @@ func (h *HandlerBase) Unfollow(c *fiber.Ctx) error {
 	username := c.Params("username")
 	userID := userIDFromToken(c)
 
-	err := h.Queries.UnfollowUser(c.Context(), sqlc.UnfollowUserParams{
+	err := h.Queries.UnfollowUser(c.Context(), &sqlc.UnfollowUserParams{
 		Username:   username,
 		FollowerID: userID,
 	})
@@ -83,7 +84,7 @@ func (h *HandlerBase) Unfollow(c *fiber.Ctx) error {
 		return err
 	}
 
-	profile, err := h.Queries.GetUserProfile(c.Context(), sqlc.GetUserProfileParams{
+	profile, err := h.Queries.GetUserProfile(c.Context(), &sqlc.GetUserProfileParams{
 		Username:   username,
 		FollowerID: userID,
 	})

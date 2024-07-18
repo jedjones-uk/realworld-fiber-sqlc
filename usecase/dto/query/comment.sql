@@ -6,8 +6,8 @@ VALUES (
            (SELECT id FROM articles WHERE slug = $1),
            $2,
            $3,
-           TO_TIMESTAMP(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-           TO_TIMESTAMP(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
        )
 RETURNING id, created_at, updated_at, body;
 

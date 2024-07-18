@@ -18,8 +18,8 @@ VALUES (
            (SELECT id FROM articles WHERE slug = $1),
            $2,
            $3,
-           TO_TIMESTAMP(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-           TO_TIMESTAMP(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
        )
 RETURNING id, created_at, updated_at, body
 `
@@ -38,7 +38,7 @@ type CreateCommentRow struct {
 }
 
 // comment.sql
-func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (CreateCommentRow, error) {
+func (q *Queries) CreateComment(ctx context.Context, arg *CreateCommentParams) (CreateCommentRow, error) {
 	row := q.db.QueryRow(ctx, createComment, arg.Slug, arg.UserID, arg.Body)
 	var i CreateCommentRow
 	err := row.Scan(
@@ -60,7 +60,7 @@ type DeleteCommentParams struct {
 	UserID pgtype.Int8 `json:"userId"`
 }
 
-func (q *Queries) DeleteComment(ctx context.Context, arg DeleteCommentParams) error {
+func (q *Queries) DeleteComment(ctx context.Context, arg *DeleteCommentParams) error {
 	_, err := q.db.Exec(ctx, deleteComment, arg.ID, arg.UserID)
 	return err
 }

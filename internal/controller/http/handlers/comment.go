@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mitchellh/mapstructure"
@@ -31,6 +32,7 @@ type CommentResp struct {
 
 func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 	userID := userIDFromToken(c)
+	fmt.Println(userID)
 	if userID == 0 {
 		return fiber.ErrUnauthorized
 	}
@@ -41,7 +43,7 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 		return err
 	}
 
-	comment, err := h.Queries.CreateComment(c.Context(), sqlc.CreateCommentParams{
+	comment, err := h.Queries.CreateComment(c.Context(), &sqlc.CreateCommentParams{
 		Slug:   slug,
 		Body:   req.Comment.Body,
 		UserID: pgtype.Int8{Int64: userID, Valid: true},
@@ -50,7 +52,7 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 		return err
 	}
 
-	author, err := h.Queries.GetUserProfileById(c.Context(), sqlc.GetUserProfileByIdParams{
+	author, err := h.Queries.GetUserProfileById(c.Context(), &sqlc.GetUserProfileByIdParams{
 		ID:         userID,
 		FollowerID: userID,
 	})
@@ -84,7 +86,7 @@ func (h *HandlerBase) DeleteComment(c *fiber.Ctx) error {
 	}
 	commentID32 := int32(i)
 
-	err = h.Queries.DeleteComment(c.Context(), sqlc.DeleteCommentParams{
+	err = h.Queries.DeleteComment(c.Context(), &sqlc.DeleteCommentParams{
 		ID:     commentID32,
 		UserID: pgtype.Int8{Int64: userID, Valid: true},
 	})

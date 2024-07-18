@@ -52,6 +52,9 @@ func userIDFromToken(c *fiber.Ctx) int64 {
 	return id
 }
 
+//TODO response login
+//TODO response register
+
 func (h *HandlerBase) Login(c *fiber.Ctx) error {
 	var params LoginParams
 	if err := c.BodyParser(&params); err != nil {
@@ -80,6 +83,7 @@ func (h *HandlerBase) Login(c *fiber.Ctx) error {
 	mapstructure.Decode(user, &userMap)
 
 	userMap["token"] = token
+	userMap["bio"] = user.Bio.String
 
 	delete(userMap, "password")
 	delete(userMap, "id")
@@ -98,7 +102,7 @@ func (h *HandlerBase) Register(c *fiber.Ctx) error {
 		return err
 	}
 
-	user, err := h.Queries.CreateUser(context.Background(), sqlc.CreateUserParams{
+	user, err := h.Queries.CreateUser(context.Background(), &sqlc.CreateUserParams{
 		Email:    params.User.Email,
 		Username: params.User.Username,
 		Password: hashPass,

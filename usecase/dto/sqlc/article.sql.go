@@ -74,7 +74,7 @@ type CreateArticleRow struct {
 	FavoritesCount int32       `json:"favoritesCount"`
 }
 
-func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (CreateArticleRow, error) {
+func (q *Queries) CreateArticle(ctx context.Context, arg *CreateArticleParams) (CreateArticleRow, error) {
 	row := q.db.QueryRow(ctx, createArticle,
 		arg.Slug,
 		arg.Title,
@@ -109,7 +109,7 @@ type DeleteArticleParams struct {
 	AuthorID pgtype.Int8 `json:"authorId"`
 }
 
-func (q *Queries) DeleteArticle(ctx context.Context, arg DeleteArticleParams) (Article, error) {
+func (q *Queries) DeleteArticle(ctx context.Context, arg *DeleteArticleParams) (Article, error) {
 	row := q.db.QueryRow(ctx, deleteArticle, arg.Slug, arg.AuthorID)
 	var i Article
 	err := row.Scan(
@@ -148,7 +148,7 @@ type FavoriteArticleParams struct {
 	UserID int64  `json:"userId"`
 }
 
-func (q *Queries) FavoriteArticle(ctx context.Context, arg FavoriteArticleParams) (Article, error) {
+func (q *Queries) FavoriteArticle(ctx context.Context, arg *FavoriteArticleParams) (Article, error) {
 	row := q.db.QueryRow(ctx, favoriteArticle, arg.Slug, arg.UserID)
 	var i Article
 	err := row.Scan(
@@ -163,6 +163,117 @@ func (q *Queries) FavoriteArticle(ctx context.Context, arg FavoriteArticleParams
 		&i.AuthorID,
 	)
 	return i, err
+}
+
+const feedArticles = `-- name: FeedArticles :many
+WITH filtered_articles AS (
+    SELECT
+        a.id, a.slug, a.title, a.description, a.body, a.created_at, a.updated_at, a.favorites_count, a.author_id,
+        u.username AS author_username,
+        u.bio AS author_bio,
+        u.image AS author_image,
+        (CASE
+             WHEN $3::int IS NULL THEN FALSE
+             ELSE EXISTS (
+                 SELECT 1
+                 FROM follows
+                 WHERE follower_id = $3::int
+                   AND followee_id = a.author_id
+             )
+            END) AS following,
+        (SELECT ARRAY_AGG(t.tag)
+         FROM tags t
+                  JOIN article_tags at ON t.id = at.tag_id
+         WHERE at.article_id = a.id) AS tags,
+        (CASE
+             WHEN $3::int IS NULL THEN FALSE
+             ELSE EXISTS (
+                 SELECT 1
+                 FROM favorites
+                 WHERE user_id = $3::int
+                   AND article_id = a.id
+             )
+            END) AS favorited
+    FROM articles a
+             LEFT JOIN users u ON a.author_id = u.id
+             LEFT JOIN article_tags at ON a.id = at.article_id
+             LEFT JOIN tags t ON at.tag_id = t.id
+             LEFT JOIN favorites f ON a.id = f.article_id
+    GROUP BY a.id, u.username, u.bio, u.image, a.author_id
+)
+SELECT
+    fa.slug,
+    fa.title,
+    fa.description,
+    fa.body,
+    fa.tags AS tag_list,
+    to_char(fa.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
+    to_char(fa.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
+    fa.favorites_count,
+    fa.favorited,
+    fa.author_username AS username,
+    fa.author_bio AS bio,
+    fa.author_image AS image,
+    fa.following
+FROM filtered_articles fa
+ORDER BY fa.created_at DESC
+LIMIT $2::int OFFSET $1::int
+`
+
+type FeedArticlesParams struct {
+	Offsett int32       `json:"offsett"`
+	Limitt  int32       `json:"limitt"`
+	UserID  pgtype.Int4 `json:"userId"`
+}
+
+type FeedArticlesRow struct {
+	Slug           string      `json:"slug"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Body           string      `json:"body"`
+	TagList        interface{} `json:"tagList"`
+	CreatedAt      string      `json:"createdAt"`
+	UpdatedAt      string      `json:"updatedAt"`
+	FavoritesCount int32       `json:"favoritesCount"`
+	Favorited      interface{} `json:"favorited"`
+	Username       pgtype.Text `json:"username"`
+	Bio            pgtype.Text `json:"bio"`
+	Image          pgtype.Text `json:"image"`
+	Following      interface{} `json:"following"`
+}
+
+func (q *Queries) FeedArticles(ctx context.Context, arg *FeedArticlesParams) ([]FeedArticlesRow, error) {
+	rows, err := q.db.Query(ctx, feedArticles, arg.Offsett, arg.Limitt, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FeedArticlesRow{}
+	for rows.Next() {
+		var i FeedArticlesRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.Body,
+			&i.TagList,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.FavoritesCount,
+			&i.Favorited,
+			&i.Username,
+			&i.Bio,
+			&i.Image,
+			&i.Following,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getArticle = `-- name: GetArticle :one
@@ -245,6 +356,113 @@ func (q *Queries) GetTags(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const listArticles = `-- name: ListArticles :many
+SELECT
+    a.slug,
+    a.title,
+    a.description,
+    a.body,
+    a.created_at AS "createdAt",
+    a.updated_at AS "updatedAt",
+    COALESCE(f.favorites_count, 0) AS "favoritesCount",
+    u.username AS "authorUsername",
+    u.bio AS "authorBio",
+    u.image AS "authorImage",
+    COALESCE(fav.user_id IS NOT NULL, FALSE) AS "favorited",
+    ARRAY_AGG(t.tag) AS "tagList",
+    COALESCE(follow.follower_id IS NOT NULL, FALSE) AS "following"
+FROM
+    articles a
+        JOIN
+    users u ON a.author_id = u.id
+        LEFT JOIN
+    article_tags at ON a.id = at.article_id
+        LEFT JOIN
+    tags t ON at.tag_id = t.id
+        LEFT JOIN
+    (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
+        LEFT JOIN
+    favorites fav ON a.id = fav.article_id AND fav.user_id = $1::BIGINT
+        LEFT JOIN
+    follows follow ON u.id = follow.followee_id AND follow.follower_id = $1::BIGINT
+GROUP BY
+    a.id, u.id, f.favorites_count, fav.user_id, follow.follower_id
+HAVING
+    ($2::TEXT IS NULL OR $2::TEXT = ANY(ARRAY_AGG(t.tag)::TEXT[])) AND
+    ($3::TEXT IS NULL OR u.username = $3::TEXT) AND
+    ($4::TEXT IS NULL OR a.id IN (SELECT article_id FROM favorites WHERE user_id = (SELECT id FROM users WHERE username = $4::TEXT)))
+ORDER BY
+    a.created_at DESC
+LIMIT
+    $6::INT OFFSET $5::INT
+`
+
+type ListArticlesParams struct {
+	UserID      pgtype.Int8 `json:"userId"`
+	Tag         pgtype.Text `json:"tag"`
+	Author      pgtype.Text `json:"author"`
+	FavoritedBy pgtype.Text `json:"favoritedBy"`
+	Offsett     pgtype.Int4 `json:"offsett"`
+	Limitt      pgtype.Int4 `json:"limitt"`
+}
+
+type ListArticlesRow struct {
+	Slug           string           `json:"slug"`
+	Title          string           `json:"title"`
+	Description    string           `json:"description"`
+	Body           string           `json:"body"`
+	CreatedAt      pgtype.Timestamp `json:"createdAt"`
+	UpdatedAt      pgtype.Timestamp `json:"updatedAt"`
+	FavoritesCount int64            `json:"favoritesCount"`
+	AuthorUsername string           `json:"authorUsername"`
+	AuthorBio      pgtype.Text      `json:"authorBio"`
+	AuthorImage    pgtype.Text      `json:"authorImage"`
+	Favorited      interface{}      `json:"favorited"`
+	TagList        interface{}      `json:"tagList"`
+	Following      interface{}      `json:"following"`
+}
+
+func (q *Queries) ListArticles(ctx context.Context, arg *ListArticlesParams) ([]ListArticlesRow, error) {
+	rows, err := q.db.Query(ctx, listArticles,
+		arg.UserID,
+		arg.Tag,
+		arg.Author,
+		arg.FavoritedBy,
+		arg.Offsett,
+		arg.Limitt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArticlesRow{}
+	for rows.Next() {
+		var i ListArticlesRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.Body,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.FavoritesCount,
+			&i.AuthorUsername,
+			&i.AuthorBio,
+			&i.AuthorImage,
+			&i.Favorited,
+			&i.TagList,
+			&i.Following,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const unfavoriteArticle = `-- name: UnfavoriteArticle :one
 WITH article_id_cte AS (
     SELECT a.id
@@ -266,7 +484,7 @@ type UnfavoriteArticleParams struct {
 	UserID int64  `json:"userId"`
 }
 
-func (q *Queries) UnfavoriteArticle(ctx context.Context, arg UnfavoriteArticleParams) (Article, error) {
+func (q *Queries) UnfavoriteArticle(ctx context.Context, arg *UnfavoriteArticleParams) (Article, error) {
 	row := q.db.QueryRow(ctx, unfavoriteArticle, arg.Slug, arg.UserID)
 	var i Article
 	err := row.Scan(
@@ -339,7 +557,7 @@ type UpdateArticleRow struct {
 	Taglist        interface{} `json:"taglist"`
 }
 
-func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (UpdateArticleRow, error) {
+func (q *Queries) UpdateArticle(ctx context.Context, arg *UpdateArticleParams) (UpdateArticleRow, error) {
 	row := q.db.QueryRow(ctx, updateArticle,
 		arg.Slug,
 		arg.AuthorID,

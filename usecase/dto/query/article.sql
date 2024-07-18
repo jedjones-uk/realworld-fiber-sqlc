@@ -143,3 +143,103 @@ RETURNING id, slug, title, description, body, created_at, updated_at, favorites_
 -- name: GetTags :many
 SELECT tag FROM tags;
 
+-- name: ListArticles :many
+SELECT
+    a.slug,
+    a.title,
+    a.description,
+    a.body,
+    a.created_at AS "createdAt",
+    a.updated_at AS "updatedAt",
+    COALESCE(f.favorites_count, 0) AS "favoritesCount",
+    u.username AS "authorUsername",
+    u.bio AS "authorBio",
+    u.image AS "authorImage",
+    COALESCE(fav.user_id IS NOT NULL, FALSE) AS "favorited",
+    ARRAY_AGG(t.tag) AS "tagList",
+    COALESCE(follow.follower_id IS NOT NULL, FALSE) AS "following"
+FROM
+    articles a
+        JOIN
+    users u ON a.author_id = u.id
+        LEFT JOIN
+    article_tags at ON a.id = at.article_id
+        LEFT JOIN
+    tags t ON at.tag_id = t.id
+        LEFT JOIN
+    (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
+        LEFT JOIN
+    favorites fav ON a.id = fav.article_id AND fav.user_id = sqlc.narg('user_id')::BIGINT
+        LEFT JOIN
+    follows follow ON u.id = follow.followee_id AND follow.follower_id = sqlc.narg('user_id')::BIGINT
+GROUP BY
+    a.id, u.id, f.favorites_count, fav.user_id, follow.follower_id
+HAVING
+    (sqlc.narg('tag')::TEXT IS NULL OR sqlc.narg('tag')::TEXT = ANY(ARRAY_AGG(t.tag)::TEXT[])) AND
+    (sqlc.narg('author')::TEXT IS NULL OR u.username = sqlc.narg('author')::TEXT) AND
+    (sqlc.narg('favorited_by')::TEXT IS NULL OR a.id IN (SELECT article_id FROM favorites WHERE user_id = (SELECT id FROM users WHERE username = sqlc.narg('favorited_by')::TEXT)))
+ORDER BY
+    a.created_at DESC
+LIMIT
+    sqlc.narg('limitt')::INT OFFSET sqlc.narg('offsett')::INT;
+
+
+
+
+
+
+-- name: FeedArticles :many
+WITH filtered_articles AS (
+    SELECT
+        a.*,
+        u.username AS author_username,
+        u.bio AS author_bio,
+        u.image AS author_image,
+        (CASE
+             WHEN sqlc.narg(user_id)::int IS NULL THEN FALSE
+             ELSE EXISTS (
+                 SELECT 1
+                 FROM follows
+                 WHERE follower_id = sqlc.narg(user_id)::int
+                   AND followee_id = a.author_id
+             )
+            END) AS following,
+        (SELECT ARRAY_AGG(t.tag)
+         FROM tags t
+                  JOIN article_tags at ON t.id = at.tag_id
+         WHERE at.article_id = a.id) AS tags,
+        (CASE
+             WHEN sqlc.narg(user_id)::int IS NULL THEN FALSE
+             ELSE EXISTS (
+                 SELECT 1
+                 FROM favorites
+                 WHERE user_id = sqlc.narg(user_id)::int
+                   AND article_id = a.id
+             )
+            END) AS favorited
+    FROM articles a
+             LEFT JOIN users u ON a.author_id = u.id
+             LEFT JOIN article_tags at ON a.id = at.article_id
+             LEFT JOIN tags t ON at.tag_id = t.id
+             LEFT JOIN favorites f ON a.id = f.article_id
+    GROUP BY a.id, u.username, u.bio, u.image, a.author_id
+)
+SELECT
+    fa.slug,
+    fa.title,
+    fa.description,
+    fa.body,
+    fa.tags AS tag_list,
+    to_char(fa.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
+    to_char(fa.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
+    fa.favorites_count,
+    fa.favorited,
+    fa.author_username AS username,
+    fa.author_bio AS bio,
+    fa.author_image AS image,
+    fa.following
+FROM filtered_articles fa
+ORDER BY fa.created_at DESC
+LIMIT @limitt::int OFFSET @offsett::int;
+
+
