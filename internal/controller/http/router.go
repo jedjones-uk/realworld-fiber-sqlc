@@ -1,4 +1,4 @@
-package http
+package routes
 
 import (
 	"github.com/gofiber/fiber/v2"
@@ -8,7 +8,7 @@ import (
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
-func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries, l *logger.Logger) {
+func Setup(app *fiber.App, dbQueries sqlc.Querier, l logger.Interface) {
 
 	handlerBase := handlers.NewHandlerQ(dbQueries, l)
 	api := app.Group("/api")

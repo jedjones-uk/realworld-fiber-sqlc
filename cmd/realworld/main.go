@@ -5,10 +5,6 @@ import (
 )
 
 func main() {
-	app.Run()
-
+	realWorld := app.New()
+	realWorld.Listen(":3000")
 }
-
-//func init() {
-//	dto.ConnectDB()
-//}

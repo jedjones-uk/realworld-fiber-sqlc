@@ -3,21 +3,19 @@ package app
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"log"
 	"realworld-fiber-sqlc/internal/controller/http"
 	"realworld-fiber-sqlc/pkg/logger"
 	"realworld-fiber-sqlc/usecase/dto"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
-func Run() {
-
+func New() *fiber.App {
 	l := logger.New("debug")
 
 	var err error
-	pool, err := dto.NewPool()
+	pool, err := dto.NewPool(l)
 	if err != nil {
-		log.Fatal(err)
+		l.Fatal(err)
 	}
 	defer pool.Close()
 	dbQueries := sqlc.New(pool)
@@ -34,8 +32,7 @@ func Run() {
 		return c.SendStatus(404)
 	})
 
-	http.SetupRoutes(app, dbQueries, l)
+	routes.Setup(app, dbQueries, l)
 
-	app.Listen(":3000")
-
+	return app
 }

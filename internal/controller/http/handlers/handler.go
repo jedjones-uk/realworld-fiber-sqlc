@@ -6,11 +6,11 @@ import (
 )
 
 type HandlerBase struct {
-	Queries *sqlc.Queries
-	*logger.Logger
+	Queries sqlc.Querier
+	Logger  logger.Interface
 }
 
-func NewHandlerQ(queries *sqlc.Queries, l *logger.Logger) *HandlerBase {
+func NewHandlerQ(queries sqlc.Querier, l logger.Interface) *HandlerBase {
 	return &HandlerBase{
 		Queries: queries,
 		Logger:  l,

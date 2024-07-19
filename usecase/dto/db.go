@@ -2,27 +2,27 @@ package dto
 
 import (
 	"context"
-	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"log"
+	"realworld-fiber-sqlc/pkg/logger"
 )
 
 var DB *pgxpool.Pool
 
-func NewPool() (*pgxpool.Pool, error) {
-	// Connect to the dto
-	log.Printf("Connecting to the database")
+func NewPool(l *logger.Logger) (*pgxpool.Pool, error) {
+	l.Info("Connecting to the database")
+
 	connStr := "postgres://postgres:postgres@localhost:5432/realworld"
 	dbpool, err := pgxpool.New(context.Background(), connStr)
 	if err != nil {
-		fmt.Printf("Unable to connect to the database: %v\n", err)
-		log.Fatal(err)
+		l.Warn("failed to connect to the database")
+		return nil, err
 	}
-	//defer dbpool.Close()
-	log.Printf("Connected to the database")
-	// Check if the connection is successful
+
+	l.Info("Connected to the database")
+
 	if err := dbpool.Ping(context.Background()); err != nil {
-		log.Fatal(err, "failed to ping the database")
+		l.Warn("failed to ping the database")
+		return nil, err
 	}
 
 	return dbpool, nil
