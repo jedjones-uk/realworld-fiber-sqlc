@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/mitchellh/mapstructure"
 	"log"
 	"realworld-fiber-sqlc/pkg/hash"
 	jwt2 "realworld-fiber-sqlc/pkg/jwt"
@@ -29,7 +28,7 @@ type LoginParams struct {
 	} `json:"user"`
 }
 
-type UserObj struct {
+type User struct {
 	Email    string `json:"email"`
 	Token    string `json:"token"`
 	Username string `json:"username"`
@@ -51,9 +50,6 @@ func userIDFromToken(c *fiber.Ctx) int64 {
 	id, _ := strconv.ParseInt(subj, 10, 64)
 	return id
 }
-
-//TODO response login
-//TODO response register
 
 func (h *HandlerBase) Login(c *fiber.Ctx) error {
 	var params LoginParams
@@ -78,17 +74,9 @@ func (h *HandlerBase) Login(c *fiber.Ctx) error {
 
 	token, _ := jwt2.GenerateToken(user.ID)
 
-	userMap := make(map[string]interface{})
+	resp := generateUser(user, token)
 
-	mapstructure.Decode(user, &userMap)
-
-	userMap["token"] = token
-	userMap["bio"] = user.Bio.String
-
-	delete(userMap, "password")
-	delete(userMap, "id")
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": userMap})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": resp})
 }
 
 func (h *HandlerBase) Register(c *fiber.Ctx) error {
@@ -114,14 +102,18 @@ func (h *HandlerBase) Register(c *fiber.Ctx) error {
 
 	token, _ := jwt2.GenerateToken(user.ID)
 
-	userMap := make(map[string]interface{})
+	resp := generateUser(user, token)
 
-	mapstructure.Decode(user, &userMap)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": resp})
+}
 
-	userMap["token"] = token
+func generateUser(userDB sqlc.User, token string) *User {
+	return &User{
+		Email:    userDB.Email,
+		Username: userDB.Username,
+		Bio:      userDB.Bio.String,
+		Image:    userDB.Image.String,
+		Token:    token,
+	}
 
-	delete(userMap, "password")
-	delete(userMap, "id")
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": userMap})
 }

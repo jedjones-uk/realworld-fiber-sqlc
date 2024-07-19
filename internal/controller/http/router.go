@@ -34,7 +34,7 @@ func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
 	articlesRoute := api.Group("/articles")
 	articlesRoute.Get("/:slug", handlerBase.GetArticle)
 	articlesRoute.Get("/", handlerBase.GetArticles)
-	articlesRoute.Get("/feed", middleware.Protected(), handlerBase.FeedArticles)
+	articlesRoute.Get("/feed", middleware.Protected(), handlerBase.Feed)
 	articlesRoute.Post("/", middleware.Protected(), handlerBase.CreateArticle)
 	articlesRoute.Put("/:slug", middleware.Protected(), handlerBase.UpdateArticle)
 	articlesRoute.Delete("/:slug", middleware.Protected(), handlerBase.DeleteArticle)

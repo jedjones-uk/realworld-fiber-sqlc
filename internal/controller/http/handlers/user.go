@@ -3,7 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/mitchellh/mapstructure"
+	"realworld-fiber-sqlc/pkg/hash"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
@@ -36,13 +36,13 @@ func (h *HandlerBase) CurrentUser(c *fiber.Ctx) error {
 
 	token := c.Locals("user").(*jwt.Token).Raw
 
-	userMap := make(map[string]interface{})
-
-	mapstructure.Decode(user, &userMap)
-
-	userMap["token"] = token
-
-	return c.Status(200).JSON(fiber.Map{"user": userMap})
+	return c.Status(200).JSON(fiber.Map{"user": User{
+		Email:    user.Email,
+		Username: user.Username,
+		Bio:      user.Bio.String,
+		Image:    user.Image.String,
+		Token:    token,
+	}})
 }
 
 func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
@@ -54,11 +54,15 @@ func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
 		return err
 	}
 
+	hashed, err := hash.HashPassword(params.User.Password)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
 	user, err := h.Queries.UpdateUser(c.Context(), &sqlc.UpdateUserParams{
 		ID:       id,
 		Email:    params.User.Email,
 		Username: params.User.Username,
-		Password: params.User.Password,
+		Password: hashed,
 		Bio:      params.User.Bio,
 		Image:    params.User.Image,
 	})
@@ -68,14 +72,14 @@ func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
 
 	token := c.Locals("user").(*jwt.Token).Raw
 
-	userMap := make(map[string]interface{})
-
-	mapstructure.Decode(user, &userMap)
-
-	userMap["token"] = token
-
 	return c.Status(200).JSON(
 		fiber.Map{
-			"user": userMap,
+			"user": User{
+				Email:    user.Email,
+				Username: user.Username,
+				Bio:      user.Bio.String,
+				Image:    user.Image.String,
+				Token:    token,
+			},
 		})
 }

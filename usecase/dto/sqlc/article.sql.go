@@ -15,7 +15,7 @@ const createArticle = `-- name: CreateArticle :one
 WITH inserted_article AS (
     INSERT INTO articles (slug, title, description, body, author_id)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count
+        RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
 ),
      inserted_tags AS (
          INSERT INTO tags (tag)
@@ -24,33 +24,32 @@ WITH inserted_article AS (
              RETURNING id, tag
      ),
      tag_ids AS (
-         SELECT id
-         FROM tags
-         WHERE tag = ANY ($6::text[])
+         SELECT id FROM tags WHERE tag = ANY($6)
      ),
      inserted_article_tags AS (
          INSERT INTO article_tags (article_id, tag_id)
-             SELECT inserted_article.id, tag_ids.id
-             FROM inserted_article, tag_ids
+             SELECT (SELECT id FROM inserted_article), id FROM tag_ids
+             ON CONFLICT (article_id, tag_id) DO NOTHING
      )
 SELECT
-    inserted_article.slug,
-    inserted_article.title,
-    inserted_article.description,
-    inserted_article.body,
-    array_agg(tag.tag) AS tag_list,
-    to_char(inserted_article.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
-    to_char(inserted_article.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
-    false AS favorited,
-    inserted_article.favorites_count as favorites_count
-FROM
-    inserted_article
-        JOIN
-    article_tags ON inserted_article.id = article_tags.article_id
-        JOIN
-    tags AS tag ON article_tags.tag_id = tag.id
-GROUP BY
-    inserted_article.id
+    ia.slug,
+    ia.title,
+    ia.description,
+    ia.body,
+    ia.created_at AS "createdAt",
+    ia.updated_at AS "updatedAt",
+    ia.favorites_count AS "favoritesCount",
+    json_build_object(
+            'username', u.username,
+            'bio', u.bio,
+            'image', u.image
+    ) AS author,
+    array_agg(t.tag) AS tagList
+FROM inserted_article ia
+         JOIN users u ON ia.author_id = u.id
+         LEFT JOIN article_tags at ON ia.id = at.article_id
+         LEFT JOIN tags t ON at.tag_id = t.id
+GROUP BY ia.id, ia.slug, ia.title, ia.description, ia.body, ia.created_at, ia.updated_at, ia.favorites_count, u.id, u.username, u.bio, u.image
 `
 
 type CreateArticleParams struct {
@@ -63,15 +62,15 @@ type CreateArticleParams struct {
 }
 
 type CreateArticleRow struct {
-	Slug           string      `json:"slug"`
-	Title          string      `json:"title"`
-	Description    string      `json:"description"`
-	Body           string      `json:"body"`
-	TagList        interface{} `json:"tagList"`
-	CreatedAt      string      `json:"createdAt"`
-	UpdatedAt      string      `json:"updatedAt"`
-	Favorited      bool        `json:"favorited"`
-	FavoritesCount int32       `json:"favoritesCount"`
+	Slug           string           `json:"slug"`
+	Title          string           `json:"title"`
+	Description    string           `json:"description"`
+	Body           string           `json:"body"`
+	CreatedAt      pgtype.Timestamp `json:"createdAt"`
+	UpdatedAt      pgtype.Timestamp `json:"updatedAt"`
+	FavoritesCount int32            `json:"favoritesCount"`
+	Author         []byte           `json:"author"`
+	Taglist        interface{}      `json:"taglist"`
 }
 
 func (q *Queries) CreateArticle(ctx context.Context, arg *CreateArticleParams) (CreateArticleRow, error) {
@@ -89,18 +88,20 @@ func (q *Queries) CreateArticle(ctx context.Context, arg *CreateArticleParams) (
 		&i.Title,
 		&i.Description,
 		&i.Body,
-		&i.TagList,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Favorited,
 		&i.FavoritesCount,
+		&i.Author,
+		&i.Taglist,
 	)
 	return i, err
 }
 
 const deleteArticle = `-- name: DeleteArticle :one
-DELETE FROM articles
-WHERE slug = $1 and author_id = $2
+DELETE
+FROM articles
+WHERE slug = $1
+  and author_id = $2
 RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
 `
 
@@ -128,31 +129,78 @@ func (q *Queries) DeleteArticle(ctx context.Context, arg *DeleteArticleParams) (
 
 const favoriteArticle = `-- name: FavoriteArticle :one
 WITH article_id_cte AS (
-    SELECT a.id
+    SELECT a.id, a.author_id
     FROM articles a
     WHERE a.slug = $1
-), insert_favorite AS (
-    INSERT INTO favorites (user_id, article_id)
-        SELECT $2, a.id
-        FROM article_id_cte a
-        RETURNING article_id
-)
-UPDATE articles
-SET favorites_count = favorites_count + 1
-WHERE id = (SELECT article_id FROM insert_favorite)
-RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
+),
+     insert_favorite AS (
+         INSERT INTO favorites (user_id, article_id)
+             SELECT $2, a.id
+             FROM article_id_cte a
+             RETURNING article_id
+     ),
+     update_article AS (
+         UPDATE articles
+             SET favorites_count = favorites_count + 1
+             WHERE id = (SELECT article_id FROM insert_favorite)
+             RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
+     ),
+     taglist_cte AS (
+         SELECT at.article_id, array_agg(t.tag) AS taglist
+         FROM article_tags at
+                  JOIN tags t ON at.tag_id = t.id
+         WHERE at.article_id = (SELECT id FROM update_article)
+         GROUP BY at.article_id
+     )
+SELECT
+    ua.slug,
+    ua.title,
+    ua.description,
+    ua.body,
+    to_char(ua.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
+    to_char(ua.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
+    ua.favorites_count,
+    u.username,
+    u.bio,
+    u.image,
+    TRUE AS favorited,
+    EXISTS (
+        SELECT 1
+        FROM follows f
+        WHERE f.follower_id = $2
+          AND f.followee_id = ua.author_id
+    ) AS following,
+    COALESCE(tl.taglist, '{}') AS taglist
+FROM update_article ua
+         JOIN users u ON ua.author_id = u.id
+         LEFT JOIN taglist_cte tl ON ua.id = tl.article_id
 `
 
 type FavoriteArticleParams struct {
-	Slug   string `json:"slug"`
-	UserID int64  `json:"userId"`
+	Slug       string `json:"slug"`
+	FollowerID int64  `json:"followerId"`
 }
 
-func (q *Queries) FavoriteArticle(ctx context.Context, arg *FavoriteArticleParams) (Article, error) {
-	row := q.db.QueryRow(ctx, favoriteArticle, arg.Slug, arg.UserID)
-	var i Article
+type FavoriteArticleRow struct {
+	Slug           string      `json:"slug"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Body           string      `json:"body"`
+	CreatedAt      string      `json:"createdAt"`
+	UpdatedAt      string      `json:"updatedAt"`
+	FavoritesCount int32       `json:"favoritesCount"`
+	Username       string      `json:"username"`
+	Bio            pgtype.Text `json:"bio"`
+	Image          pgtype.Text `json:"image"`
+	Favorited      bool        `json:"favorited"`
+	Following      bool        `json:"following"`
+	Taglist        interface{} `json:"taglist"`
+}
+
+func (q *Queries) FavoriteArticle(ctx context.Context, arg *FavoriteArticleParams) (FavoriteArticleRow, error) {
+	row := q.db.QueryRow(ctx, favoriteArticle, arg.Slug, arg.FollowerID)
+	var i FavoriteArticleRow
 	err := row.Scan(
-		&i.ID,
 		&i.Slug,
 		&i.Title,
 		&i.Description,
@@ -160,61 +208,58 @@ func (q *Queries) FavoriteArticle(ctx context.Context, arg *FavoriteArticleParam
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.FavoritesCount,
-		&i.AuthorID,
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Favorited,
+		&i.Following,
+		&i.Taglist,
 	)
 	return i, err
 }
 
-const feedArticles = `-- name: FeedArticles :many
-WITH filtered_articles AS (
-    SELECT
-        a.id, a.slug, a.title, a.description, a.body, a.created_at, a.updated_at, a.favorites_count, a.author_id,
-        u.username AS author_username,
-        u.bio AS author_bio,
-        u.image AS author_image,
-        (CASE
-             WHEN $3::int IS NULL THEN FALSE
-             ELSE EXISTS (
-                 SELECT 1
-                 FROM follows
-                 WHERE follower_id = $3::int
-                   AND followee_id = a.author_id
-             )
-            END) AS following,
-        (SELECT ARRAY_AGG(t.tag)
-         FROM tags t
-                  JOIN article_tags at ON t.id = at.tag_id
-         WHERE at.article_id = a.id) AS tags,
-        (CASE
-             WHEN $3::int IS NULL THEN FALSE
-             ELSE EXISTS (
-                 SELECT 1
-                 FROM favorites
-                 WHERE user_id = $3::int
-                   AND article_id = a.id
-             )
-            END) AS favorited
-    FROM articles a
-             LEFT JOIN users u ON a.author_id = u.id
-             LEFT JOIN article_tags at ON a.id = at.article_id
-             LEFT JOIN tags t ON at.tag_id = t.id
-             LEFT JOIN favorites f ON a.id = f.article_id
-    GROUP BY a.id, u.username, u.bio, u.image, a.author_id
-)
-SELECT
-    fa.slug,
-    fa.title,
-    fa.description,
-    fa.body,
-    fa.tags AS tag_list,
-    to_char(fa.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
-    to_char(fa.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
-    fa.favorites_count,
-    fa.favorited,
-    fa.author_username AS username,
-    fa.author_bio AS bio,
-    fa.author_image AS image,
-    fa.following
+const feedArticles = `-- name: Feed :many
+WITH filtered_articles AS (SELECT a.id, a.slug, a.title, a.description, a.body, a.created_at, a.updated_at, a.favorites_count, a.author_id,
+                                  u.username                   AS author_username,
+                                  u.bio                        AS author_bio,
+                                  u.image                      AS author_image,
+                                  (CASE
+                                       WHEN $3::int IS NULL THEN FALSE
+                                       ELSE EXISTS (SELECT 1
+                                                    FROM follows
+                                                    WHERE follower_id = $3::int
+                                                      AND followee_id = a.author_id)
+                                      END)                     AS following,
+                                  (SELECT ARRAY_AGG(t.tag)
+                                   FROM tags t
+                                            JOIN article_tags at ON t.id = at.tag_id
+                                   WHERE at.article_id = a.id) AS tags,
+                                  (CASE
+                                       WHEN $3::int IS NULL THEN FALSE
+                                       ELSE EXISTS (SELECT 1
+                                                    FROM favorites
+                                                    WHERE user_id = $3::int
+                                                      AND article_id = a.id)
+                                      END)                     AS favorited
+                           FROM articles a
+                                    LEFT JOIN users u ON a.author_id = u.id
+                                    LEFT JOIN article_tags at ON a.id = at.article_id
+                                    LEFT JOIN tags t ON at.tag_id = t.id
+                                    LEFT JOIN favorites f ON a.id = f.article_id
+                           GROUP BY a.id, u.username, u.bio, u.image, a.author_id)
+SELECT fa.slug,
+       fa.title,
+       fa.description,
+       fa.body,
+       fa.tags                                               AS tag_list,
+       to_char(fa.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
+       to_char(fa.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
+       fa.favorites_count,
+       fa.favorited,
+       fa.author_username                                    AS username,
+       fa.author_bio                                         AS bio,
+       fa.author_image                                       AS image,
+       fa.following
 FROM filtered_articles fa
 ORDER BY fa.created_at DESC
 LIMIT $2::int OFFSET $1::int
@@ -278,27 +323,34 @@ func (q *Queries) FeedArticles(ctx context.Context, arg *FeedArticlesParams) ([]
 
 const getArticle = `-- name: GetArticle :one
 
-SELECT
-    a.slug,
-    a.title,
-    a.description,
-    a.body,
-    a.created_at,
-    a.updated_at,
-    a.favorites_count,
-    u.username AS username,
-    ARRAY_AGG(t.tag) AS tag_list,
-    (CASE WHEN EXISTS (SELECT 1 FROM favorites f WHERE f.article_id = a.id) THEN TRUE ELSE FALSE END) AS favorited
-FROM
-    articles a
-        JOIN users u ON a.author_id = u.id
-        LEFT JOIN article_tags at ON a.id = at.article_id
-        LEFT JOIN tags t ON at.tag_id = t.id
-WHERE
-    a.slug = $1
-GROUP BY
-    a.id, u.id
+SELECT a.slug,
+       a.title,
+       a.description,
+       a.body,
+       a.created_at,
+       a.updated_at,
+       a.favorites_count,
+       u.username                                                                                        AS username,
+       u.bio                                                                                             AS bio,
+       u.image                                                                                           AS image,
+       ARRAY_AGG(t.tag)                                                                                  AS tag_list,
+       (CASE WHEN EXISTS (SELECT 1 FROM favorites f WHERE f.article_id = a.id) THEN TRUE ELSE FALSE END) AS favorited,
+       (CASE
+            WHEN EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $2 AND f.followee_id = u.id)
+                THEN TRUE
+            ELSE FALSE END)                                                                              AS following
+FROM articles a
+         JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags at ON a.id = at.article_id
+         LEFT JOIN tags t ON at.tag_id = t.id
+WHERE a.slug = $1
+GROUP BY a.id, u.id
 `
+
+type GetArticleParams struct {
+	Slug   string      `json:"slug"`
+	UserID pgtype.Int8 `json:"userId"`
+}
 
 type GetArticleRow struct {
 	Slug           string           `json:"slug"`
@@ -309,13 +361,16 @@ type GetArticleRow struct {
 	UpdatedAt      pgtype.Timestamp `json:"updatedAt"`
 	FavoritesCount int32            `json:"favoritesCount"`
 	Username       string           `json:"username"`
+	Bio            pgtype.Text      `json:"bio"`
+	Image          pgtype.Text      `json:"image"`
 	TagList        interface{}      `json:"tagList"`
 	Favorited      bool             `json:"favorited"`
+	Following      bool             `json:"following"`
 }
 
 // article.sql
-func (q *Queries) GetArticle(ctx context.Context, slug string) (GetArticleRow, error) {
-	row := q.db.QueryRow(ctx, getArticle, slug)
+func (q *Queries) GetArticle(ctx context.Context, arg *GetArticleParams) (GetArticleRow, error) {
+	row := q.db.QueryRow(ctx, getArticle, arg.Slug, arg.UserID)
 	var i GetArticleRow
 	err := row.Scan(
 		&i.Slug,
@@ -326,14 +381,18 @@ func (q *Queries) GetArticle(ctx context.Context, slug string) (GetArticleRow, e
 		&i.UpdatedAt,
 		&i.FavoritesCount,
 		&i.Username,
+		&i.Bio,
+		&i.Image,
 		&i.TagList,
 		&i.Favorited,
+		&i.Following,
 	)
 	return i, err
 }
 
 const getTags = `-- name: GetTags :many
-SELECT tag FROM tags
+SELECT tag
+FROM tags
 `
 
 func (q *Queries) GetTags(ctx context.Context) ([]string, error) {
@@ -357,44 +416,42 @@ func (q *Queries) GetTags(ctx context.Context) ([]string, error) {
 }
 
 const listArticles = `-- name: ListArticles :many
-SELECT
-    a.slug,
-    a.title,
-    a.description,
-    a.body,
-    a.created_at AS "createdAt",
-    a.updated_at AS "updatedAt",
-    COALESCE(f.favorites_count, 0) AS "favoritesCount",
-    u.username AS "authorUsername",
-    u.bio AS "authorBio",
-    u.image AS "authorImage",
-    COALESCE(fav.user_id IS NOT NULL, FALSE) AS "favorited",
-    ARRAY_AGG(t.tag) AS "tagList",
-    COALESCE(follow.follower_id IS NOT NULL, FALSE) AS "following"
-FROM
-    articles a
-        JOIN
-    users u ON a.author_id = u.id
-        LEFT JOIN
-    article_tags at ON a.id = at.article_id
-        LEFT JOIN
-    tags t ON at.tag_id = t.id
-        LEFT JOIN
-    (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
-        LEFT JOIN
-    favorites fav ON a.id = fav.article_id AND fav.user_id = $1::BIGINT
-        LEFT JOIN
-    follows follow ON u.id = follow.followee_id AND follow.follower_id = $1::BIGINT
-GROUP BY
-    a.id, u.id, f.favorites_count, fav.user_id, follow.follower_id
-HAVING
-    ($2::TEXT IS NULL OR $2::TEXT = ANY(ARRAY_AGG(t.tag)::TEXT[])) AND
-    ($3::TEXT IS NULL OR u.username = $3::TEXT) AND
-    ($4::TEXT IS NULL OR a.id IN (SELECT article_id FROM favorites WHERE user_id = (SELECT id FROM users WHERE username = $4::TEXT)))
-ORDER BY
-    a.created_at DESC
-LIMIT
-    $6::INT OFFSET $5::INT
+SELECT a.slug,
+       a.title,
+       a.description,
+       a.body,
+       a.created_at                                    AS "createdAt",
+       a.updated_at                                    AS "updatedAt",
+       COALESCE(f.favorites_count, 0)                  AS "favoritesCount",
+       u.username                                      AS "authorUsername",
+       u.bio                                           AS "authorBio",
+       u.image                                         AS "authorImage",
+       COALESCE(fav.user_id IS NOT NULL, FALSE)        AS "favorited",
+       ARRAY_AGG(t.tag)                                AS "tagList",
+       COALESCE(follow.follower_id IS NOT NULL, FALSE) AS "following"
+FROM articles a
+         JOIN
+     users u ON a.author_id = u.id
+         LEFT JOIN
+     article_tags at ON a.id = at.article_id
+         LEFT JOIN
+     tags t ON at.tag_id = t.id
+         LEFT JOIN
+     (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
+         LEFT JOIN
+     favorites fav ON a.id = fav.article_id AND fav.user_id = $1::BIGINT
+         LEFT JOIN
+     follows follow ON u.id = follow.followee_id AND follow.follower_id = $1::BIGINT
+GROUP BY a.id, u.id, f.favorites_count, fav.user_id, follow.follower_id
+HAVING ($2::TEXT IS NULL OR $2::TEXT = ANY (ARRAY_AGG(t.tag)::TEXT[]))
+   AND ($3::TEXT IS NULL OR u.username = $3::TEXT)
+   AND ($4::TEXT IS NULL OR a.id IN (SELECT article_id
+                                                            FROM favorites
+                                                            WHERE user_id = (SELECT id
+                                                                             FROM users
+                                                                             WHERE username = $4::TEXT)))
+ORDER BY a.created_at DESC
+LIMIT $6::INT OFFSET $5::INT
 `
 
 type ListArticlesParams struct {
@@ -464,31 +521,69 @@ func (q *Queries) ListArticles(ctx context.Context, arg *ListArticlesParams) ([]
 }
 
 const unfavoriteArticle = `-- name: UnfavoriteArticle :one
-WITH article_id_cte AS (
-    SELECT a.id
-    FROM articles a
-    WHERE a.slug = $1
-), delete_favorite AS (
-    DELETE FROM favorites
-        WHERE user_id = $2 AND article_id = (SELECT id FROM article_id_cte)
-        RETURNING article_id
-)
-UPDATE articles
-SET favorites_count = GREATEST(favorites_count - 1, 0)
-WHERE id = (SELECT article_id FROM delete_favorite)
-RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
+WITH article_id_cte AS (SELECT a.id, a.author_id
+                        FROM articles a
+                        WHERE a.slug = $1),
+     delete_favorite AS (
+         DELETE FROM favorites
+             WHERE user_id = $2 AND article_id = (SELECT id FROM article_id_cte)
+             RETURNING article_id),
+     update_article AS (
+         UPDATE articles
+             SET favorites_count = GREATEST(favorites_count - 1, 0)
+             WHERE id = (SELECT article_id FROM delete_favorite)
+             RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id),
+     taglist_cte AS (SELECT at.article_id, array_agg(t.tag) AS taglist
+                     FROM article_tags at
+                              JOIN tags t ON at.tag_id = t.id
+                     WHERE at.article_id = (SELECT id FROM update_article)
+                     GROUP BY at.article_id)
+SELECT ua.slug,
+       ua.title,
+       ua.description,
+       ua.body,
+       to_char(ua.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
+       to_char(ua.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
+       ua.favorites_count,
+       u.username,
+       u.bio,
+       u.image,
+       EXISTS (SELECT 1
+               FROM follows f
+               WHERE f.follower_id = $2
+                 AND f.followee_id = ua.author_id)           AS following,
+       COALESCE(tl.taglist, '{}')                            AS taglist
+FROM update_article ua
+         JOIN
+     users u ON ua.author_id = u.id
+         LEFT JOIN
+     taglist_cte tl ON ua.id = tl.article_id
 `
 
 type UnfavoriteArticleParams struct {
-	Slug   string `json:"slug"`
-	UserID int64  `json:"userId"`
+	Slug       string `json:"slug"`
+	FollowerID int64  `json:"followerId"`
 }
 
-func (q *Queries) UnfavoriteArticle(ctx context.Context, arg *UnfavoriteArticleParams) (Article, error) {
-	row := q.db.QueryRow(ctx, unfavoriteArticle, arg.Slug, arg.UserID)
-	var i Article
+type UnfavoriteArticleRow struct {
+	Slug           string      `json:"slug"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Body           string      `json:"body"`
+	CreatedAt      string      `json:"createdAt"`
+	UpdatedAt      string      `json:"updatedAt"`
+	FavoritesCount int32       `json:"favoritesCount"`
+	Username       string      `json:"username"`
+	Bio            pgtype.Text `json:"bio"`
+	Image          pgtype.Text `json:"image"`
+	Following      bool        `json:"following"`
+	Taglist        interface{} `json:"taglist"`
+}
+
+func (q *Queries) UnfavoriteArticle(ctx context.Context, arg *UnfavoriteArticleParams) (UnfavoriteArticleRow, error) {
+	row := q.db.QueryRow(ctx, unfavoriteArticle, arg.Slug, arg.FollowerID)
+	var i UnfavoriteArticleRow
 	err := row.Scan(
-		&i.ID,
 		&i.Slug,
 		&i.Title,
 		&i.Description,
@@ -496,7 +591,11 @@ func (q *Queries) UnfavoriteArticle(ctx context.Context, arg *UnfavoriteArticleP
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.FavoritesCount,
-		&i.AuthorID,
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Following,
+		&i.Taglist,
 	)
 	return i, err
 }
@@ -504,40 +603,41 @@ func (q *Queries) UnfavoriteArticle(ctx context.Context, arg *UnfavoriteArticleP
 const updateArticle = `-- name: UpdateArticle :one
 WITH updated_article AS (
     UPDATE articles
-        SET slug        = CASE WHEN $3::text IS NOT NULL AND $3::text <> '' THEN $3::text ELSE slug END,
-            title       = CASE WHEN $4::text IS NOT NULL AND $4::text <> '' THEN $4::text ELSE title END,
-            description = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE description END,
-            body        = CASE WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text ELSE body END,
-            updated_at  = CURRENT_TIMESTAMP
+        SET slug = CASE WHEN $3::text IS NOT NULL AND $4::text <> '' THEN $4::text ELSE slug END,
+            title = CASE WHEN $5::text IS NOT NULL AND $5::text <> '' THEN $5::text ELSE title END,
+            description = CASE
+                              WHEN $6::text IS NOT NULL AND $6::text <> '' THEN $6::text
+                              ELSE description END,
+            body = CASE WHEN $7::text IS NOT NULL AND $7::text <> '' THEN $7::text ELSE body END,
+            updated_at = CURRENT_TIMESTAMP
         WHERE slug = $1 and author_id = $2
-        RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
-)
-SELECT
-    ua.slug,
-    ua.title,
-    ua.description,
-    ua.body,
-    to_char(ua.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at,
-    to_char(ua.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS updated_at,
-    ua.favorites_count AS favorites_count,
-    u.username,
-    (CASE WHEN EXISTS (SELECT 1 FROM favorites f WHERE f.article_id = ua.id) THEN TRUE ELSE FALSE END) AS favorited,
-    ARRAY_AGG(t.tag) AS tagList
-FROM
-    updated_article ua
-        JOIN
-    users u ON ua.author_id = u.id
-        LEFT JOIN
-    article_tags at ON ua.id = at.article_id
-        LEFT JOIN
-    tags t ON at.tag_id = t.id
-GROUP BY
-    ua.id, u.id
+        RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id)
+SELECT ua.slug,
+       ua.title,
+       ua.description,
+       ua.body,
+       to_char(ua.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ')                                              AS created_at,
+       to_char(ua.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ')                                              AS updated_at,
+       ua.favorites_count                                                                                 AS favorites_count,
+       u.username,
+       u.bio,
+       u.image,
+       (CASE WHEN EXISTS (SELECT 1 FROM favorites f WHERE f.article_id = ua.id) THEN TRUE ELSE FALSE END) AS favorited,
+       ARRAY_AGG(t.tag)                                                                                   AS tagList
+FROM updated_article ua
+         JOIN
+     users u ON ua.author_id = u.id
+         LEFT JOIN
+     article_tags at ON ua.id = at.article_id
+         LEFT JOIN
+     tags t ON at.tag_id = t.id
+GROUP BY ua.id, ua.slug, ua.title, ua.description, ua.body, ua.created_at, ua.updated_at, ua.favorites_count, u.id, u.username, u.bio, u.image
 `
 
 type UpdateArticleParams struct {
 	Slug        string      `json:"slug"`
 	AuthorID    pgtype.Int8 `json:"authorId"`
+	Newslug     string      `json:"newslug"`
 	Slug_2      string      `json:"slug2"`
 	Title       string      `json:"title"`
 	Description string      `json:"description"`
@@ -553,6 +653,8 @@ type UpdateArticleRow struct {
 	UpdatedAt      string      `json:"updatedAt"`
 	FavoritesCount int32       `json:"favoritesCount"`
 	Username       string      `json:"username"`
+	Bio            pgtype.Text `json:"bio"`
+	Image          pgtype.Text `json:"image"`
 	Favorited      bool        `json:"favorited"`
 	Taglist        interface{} `json:"taglist"`
 }
@@ -561,6 +663,7 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg *UpdateArticleParams) (
 	row := q.db.QueryRow(ctx, updateArticle,
 		arg.Slug,
 		arg.AuthorID,
+		arg.Newslug,
 		arg.Slug_2,
 		arg.Title,
 		arg.Description,
@@ -576,6 +679,8 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg *UpdateArticleParams) (
 		&i.UpdatedAt,
 		&i.FavoritesCount,
 		&i.Username,
+		&i.Bio,
+		&i.Image,
 		&i.Favorited,
 		&i.Taglist,
 	)

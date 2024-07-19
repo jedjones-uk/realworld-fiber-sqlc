@@ -5,13 +5,11 @@ import (
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
-type ProfileResp struct {
-	Profile struct {
-		Username  string `json:"username"`
-		Bio       string `json:"bio"`
-		Image     string `json:"image"`
-		Following bool   `json:"following"`
-	} `json:"profile"`
+type Profile struct {
+	Username  string `json:"username"`
+	Bio       string `json:"bio"`
+	Image     string `json:"image"`
+	Following bool   `json:"following"`
 }
 
 type Author struct {
@@ -68,7 +66,12 @@ func (h *HandlerBase) Follow(c *fiber.Ctx) error {
 	profile.Following = true
 
 	return c.Status(200).JSON(fiber.Map{
-		"profile": profile,
+		"profile": Profile{
+			Username:  profile.Username,
+			Bio:       profile.Bio.String,
+			Image:     profile.Image.String,
+			Following: true,
+		},
 	})
 }
 
@@ -93,6 +96,11 @@ func (h *HandlerBase) Unfollow(c *fiber.Ctx) error {
 	}
 
 	return c.Status(200).JSON(fiber.Map{
-		"profile": profile,
+		"profile": Profile{
+			Username:  profile.Username,
+			Bio:       profile.Bio.String,
+			Image:     profile.Image.String,
+			Following: false,
+		},
 	})
 }

@@ -13,15 +13,34 @@ import (
 
 const createComment = `-- name: CreateComment :one
 
-INSERT INTO comments (article_id, user_id, body, created_at, updated_at)
-VALUES (
-           (SELECT id FROM articles WHERE slug = $1),
-           $2,
-           $3,
-           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-       )
-RETURNING id, created_at, updated_at, body
+WITH inserted_comment AS (
+    INSERT INTO comments (article_id, user_id, body, created_at, updated_at)
+        VALUES (
+                   (SELECT id FROM articles WHERE slug = $1),
+                   $2,
+                   $3,
+                   CURRENT_TIMESTAMP,
+                   CURRENT_TIMESTAMP
+               )
+        RETURNING id, created_at, updated_at, body, user_id
+)
+SELECT
+    ic.id,
+    ic.created_at,
+    ic.updated_at,
+    ic.body,
+    u.username,
+    u.bio,
+    u.image,
+    EXISTS (
+        SELECT 1
+        FROM follows f
+        WHERE f.follower_id = ic.user_id AND f.followee_id = u.id
+    ) AS following
+FROM
+    inserted_comment ic
+        JOIN
+    users u ON ic.user_id = u.id
 `
 
 type CreateCommentParams struct {
@@ -35,6 +54,10 @@ type CreateCommentRow struct {
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
 	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
 	Body      string           `json:"body"`
+	Username  string           `json:"username"`
+	Bio       pgtype.Text      `json:"bio"`
+	Image     pgtype.Text      `json:"image"`
+	Following bool             `json:"following"`
 }
 
 // comment.sql
@@ -46,6 +69,10 @@ func (q *Queries) CreateComment(ctx context.Context, arg *CreateCommentParams) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Body,
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Following,
 	)
 	return i, err
 }

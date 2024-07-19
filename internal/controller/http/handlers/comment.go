@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/mitchellh/mapstructure"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 	"strconv"
 )
@@ -52,23 +51,18 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 		return err
 	}
 
-	author, err := h.Queries.GetUserProfileById(c.Context(), &sqlc.GetUserProfileByIdParams{
-		ID:         userID,
-		FollowerID: userID,
-	})
-	if err != nil {
-		return err
-	}
-
-	commentMap := make(map[string]interface{})
-	authorMap := make(map[string]interface{})
-
-	mapstructure.Decode(comment, &commentMap)
-	mapstructure.Decode(author, &authorMap)
-
-	commentMap["author"] = authorMap
-
-	return c.JSON(fiber.Map{"comment": commentMap})
+	return c.JSON(fiber.Map{"comment": Comment{
+		ID:        comment.ID,
+		CreatedAt: comment.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
+		UpdatedAt: comment.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
+		Body:      comment.Body,
+		Author: Author{
+			Username:  comment.Username,
+			Bio:       comment.Bio.String,
+			Image:     comment.Image.String,
+			Following: comment.Following,
+		},
+	}})
 
 }
 

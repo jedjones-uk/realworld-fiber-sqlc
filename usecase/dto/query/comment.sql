@@ -1,15 +1,36 @@
 -- comment.sql
 
 -- name: CreateComment :one
-INSERT INTO comments (article_id, user_id, body, created_at, updated_at)
-VALUES (
-           (SELECT id FROM articles WHERE slug = $1),
-           $2,
-           $3,
-           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-           TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-       )
-RETURNING id, created_at, updated_at, body;
+WITH inserted_comment AS (
+    INSERT INTO comments (article_id, user_id, body, created_at, updated_at)
+        VALUES (
+                   (SELECT id FROM articles WHERE slug = $1),
+                   $2,
+                   $3,
+                   CURRENT_TIMESTAMP,
+                   CURRENT_TIMESTAMP
+               )
+        RETURNING id, created_at, updated_at, body, user_id
+)
+SELECT
+    ic.id,
+    ic.created_at,
+    ic.updated_at,
+    ic.body,
+    u.username,
+    u.bio,
+    u.image,
+    EXISTS (
+        SELECT 1
+        FROM follows f
+        WHERE f.follower_id = ic.user_id AND f.followee_id = u.id
+    ) AS following
+FROM
+    inserted_comment ic
+        JOIN
+    users u ON ic.user_id = u.id;
+
+
 
 -- name: GetSingleComment :one
 SELECT
