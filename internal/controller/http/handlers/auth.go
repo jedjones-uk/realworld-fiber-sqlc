@@ -5,36 +5,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"net/mail"
+	"realworld-fiber-sqlc/internal/entity"
+	sqlc2 "realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 	"realworld-fiber-sqlc/pkg/hash"
 	jwt2 "realworld-fiber-sqlc/pkg/jwt"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
 	"strconv"
 )
-
-type RegisterParamsT struct {
-	User RegisterParams `json:"user"`
-}
-
-type RegisterParams struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type LoginParams struct {
-	User struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	} `json:"user"`
-}
-
-type User struct {
-	Email    string `json:"email"`
-	Token    string `json:"token"`
-	Username string `json:"username"`
-	Bio      string `json:"bio"`
-	Image    string `json:"image"`
-}
 
 func validEmail(email string) bool {
 	_, err := mail.ParseAddress(email)
@@ -58,7 +34,7 @@ func userIDFromToken(c *fiber.Ctx) int64 {
 
 func (h *HandlerBase) Login(c *fiber.Ctx) error {
 	h.Logger.Info("Login handler")
-	var params LoginParams
+	var params entity.LoginParams
 	if err := c.BodyParser(&params); err != nil {
 		h.Logger.Error("error parsing body: %v", err)
 		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{
@@ -90,14 +66,18 @@ func (h *HandlerBase) Login(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	resp := generateUser(user, token)
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": resp})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": entity.User{
+		Email:    user.Email,
+		Username: user.Username,
+		Bio:      user.Bio.String,
+		Image:    user.Image.String,
+		Token:    token,
+	}})
 }
 
 func (h *HandlerBase) Register(c *fiber.Ctx) error {
 	h.Logger.Info("Register handler")
-	var params RegisterParamsT
+	var params entity.RegisterParamsT
 	if err := c.BodyParser(&params); err != nil {
 		h.Logger.Error("error parsing body: %v", err)
 		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{
@@ -119,7 +99,7 @@ func (h *HandlerBase) Register(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	user, err := h.Queries.CreateUser(context.Background(), &sqlc.CreateUserParams{
+	user, err := h.Queries.CreateUser(context.Background(), &sqlc2.CreateUserParams{
 		Email:    params.User.Email,
 		Username: params.User.Username,
 		Password: hashPass,
@@ -135,18 +115,11 @@ func (h *HandlerBase) Register(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	resp := generateUser(user, token)
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": resp})
-}
-
-func generateUser(userDB sqlc.User, token string) *User {
-	return &User{
-		Email:    userDB.Email,
-		Username: userDB.Username,
-		Bio:      userDB.Bio.String,
-		Image:    userDB.Image.String,
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"user": entity.User{
+		Email:    user.Email,
+		Username: user.Username,
+		Bio:      user.Bio.String,
+		Image:    user.Image.String,
 		Token:    token,
-	}
-
+	}})
 }

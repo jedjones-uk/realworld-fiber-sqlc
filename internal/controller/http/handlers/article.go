@@ -3,31 +3,10 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
+	"realworld-fiber-sqlc/internal/entity"
+	"realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 	"strings"
 )
-
-type CreateArticleReq struct {
-	Article struct {
-		Title       string   `json:"title"`
-		Description string   `json:"description"`
-		Body        string   `json:"body"`
-		TagList     []string `json:"tagList"`
-	} `json:"article"`
-}
-
-type Article struct {
-	Slug           string   `json:"slug"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Body           string   `json:"body"`
-	TagList        []string `json:"tagList"`
-	CreatedAt      string   `json:"createdAt"`
-	UpdatedAt      string   `json:"updatedAt"`
-	Favorited      bool     `json:"favorited"`
-	FavoritesCount int32    `json:"favoritesCount"`
-	Author         Author   `json:"author"`
-}
 
 func formTagList(tagList interface{}) []string {
 	tags := []string{}
@@ -76,7 +55,7 @@ func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	return c.Status(200).JSON(fiber.Map{"article": Article{
+	return c.Status(200).JSON(fiber.Map{"article": entity.Article{
 		Slug:           article.Slug,
 		Title:          article.Title,
 		Description:    article.Description,
@@ -86,7 +65,7 @@ func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 		UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 		Favorited:      article.Favorited,
 		FavoritesCount: article.FavoritesCount,
-		Author: Author{
+		Author: entity.Profile{
 			Username:  article.Username,
 			Bio:       article.Bio.String,
 			Image:     article.Image.String,
@@ -97,7 +76,7 @@ func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 
 func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 	h.Logger.Info("CreateArticle handler")
-	var req CreateArticleReq
+	var req entity.CreateArticleReq
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"body": []string{"can't be blank"}}})
 	}
@@ -125,7 +104,7 @@ func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	return c.Status(200).JSON(fiber.Map{"article": Article{
+	return c.Status(200).JSON(fiber.Map{"article": entity.Article{
 		Slug:           article.Slug,
 		Title:          article.Title,
 		Description:    article.Description,
@@ -135,7 +114,7 @@ func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 		UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 		Favorited:      false,
 		FavoritesCount: article.FavoritesCount,
-		Author: Author{
+		Author: entity.Profile{
 			Username:  article.Username,
 			Bio:       article.Bio.String,
 			Image:     article.Image.String,
@@ -160,7 +139,7 @@ func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"slug": []string{"can't be blank"}}})
 	}
 
-	var req CreateArticleReq
+	var req entity.CreateArticleReq
 	if err := c.BodyParser(&req); err != nil {
 		h.Logger.Error(err)
 		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"body": []string{"can't be blank"}}})
@@ -180,7 +159,7 @@ func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	return c.Status(200).JSON(fiber.Map{"article": Article{
+	return c.Status(200).JSON(fiber.Map{"article": entity.Article{
 		Slug:           article.Slug,
 		Title:          article.Title,
 		Description:    article.Description,
@@ -190,7 +169,7 @@ func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 		UpdatedAt:      article.UpdatedAt,
 		Favorited:      article.Favorited,
 		FavoritesCount: article.FavoritesCount,
-		Author: Author{
+		Author: entity.Profile{
 			Username:  article.Username,
 			Bio:       article.Bio.String,
 			Image:     article.Image.String,
@@ -248,7 +227,7 @@ func (h *HandlerBase) FavoriteArticle(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	return c.Status(200).JSON(fiber.Map{"article": Article{
+	return c.Status(200).JSON(fiber.Map{"article": entity.Article{
 		Slug:           article.Slug,
 		Title:          article.Title,
 		Description:    article.Description,
@@ -258,7 +237,7 @@ func (h *HandlerBase) FavoriteArticle(c *fiber.Ctx) error {
 		UpdatedAt:      article.UpdatedAt,
 		Favorited:      true,
 		FavoritesCount: article.FavoritesCount,
-		Author: Author{
+		Author: entity.Profile{
 			Username:  article.Username,
 			Bio:       article.Bio.String,
 			Image:     article.Image.String,
@@ -290,7 +269,7 @@ func (h *HandlerBase) UnfavoriteArticle(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	return c.Status(200).JSON(fiber.Map{"article": Article{
+	return c.Status(200).JSON(fiber.Map{"article": entity.Article{
 		Slug:           article.Slug,
 		Title:          article.Title,
 		Description:    article.Description,
@@ -300,7 +279,7 @@ func (h *HandlerBase) UnfavoriteArticle(c *fiber.Ctx) error {
 		UpdatedAt:      article.UpdatedAt,
 		Favorited:      false,
 		FavoritesCount: article.FavoritesCount,
-		Author: Author{
+		Author: entity.Profile{
 			Username:  article.Username,
 			Bio:       article.Bio.String,
 			Image:     article.Image.String,
@@ -374,11 +353,11 @@ func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	articles := make([]Article, 0)
+	articles := make([]entity.Article, 0)
 	cnt := 0
 	for _, article := range articlesData {
 		cnt += 1
-		articles = append(articles, Article{
+		articles = append(articles, entity.Article{
 			Slug:           article.Slug,
 			Title:          article.Title,
 			Description:    article.Description,
@@ -387,7 +366,7 @@ func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
 			CreatedAt:      article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 			UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 			FavoritesCount: int32(article.FavoritesCount),
-			Author: Author{
+			Author: entity.Profile{
 				Username:  article.AuthorUsername,
 				Bio:       article.AuthorBio.String,
 				Image:     article.AuthorImage.String,
@@ -429,22 +408,21 @@ func (h *HandlerBase) Feed(c *fiber.Ctx) error {
 		return c.SendStatus(500)
 	}
 
-	articles := make([]Article, 0)
+	articles := make([]entity.Article, 0)
 	cnt := 0
 	for _, article := range articlesData {
 		cnt += 1
-		articles = append(articles, Article{
-			Slug:        article.Slug,
-			Title:       article.Title,
-			Description: article.Description,
-			Body:        article.Body,
-			TagList:     formTagList(article.TagList),
-
+		articles = append(articles, entity.Article{
+			Slug:           article.Slug,
+			Title:          article.Title,
+			Description:    article.Description,
+			Body:           article.Body,
+			TagList:        formTagList(article.TagList),
 			CreatedAt:      article.CreatedAt,
 			UpdatedAt:      article.UpdatedAt,
 			Favorited:      article.Favorited.(bool),
 			FavoritesCount: article.FavoritesCount,
-			Author: Author{
+			Author: entity.Profile{
 				Username:  article.Username.String,
 				Bio:       article.Bio.String,
 				Image:     article.Image.String,

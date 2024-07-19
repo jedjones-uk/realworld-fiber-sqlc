@@ -4,30 +4,10 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
+	"realworld-fiber-sqlc/internal/entity"
+	"realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 	"strconv"
 )
-
-type CreateCommentReq struct {
-	Comment struct {
-		Body string `json:"body"`
-	} `json:"comment"`
-}
-
-type CommentResp struct {
-	Comment struct {
-		ID        int64  `json:"id"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
-		Body      string `json:"body"`
-		Author    struct {
-			Username  string `json:"username"`
-			Bio       string `json:"bio"`
-			Image     string `json:"image"`
-			Following bool   `json:"following"`
-		} `json:"author"`
-	}
-}
 
 func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 	userID := userIDFromToken(c)
@@ -37,7 +17,7 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 	}
 	slug := c.Params("slug")
 
-	var req CreateCommentReq
+	var req entity.CreateCommentReq
 	if err := c.BodyParser(&req); err != nil {
 		return err
 	}
@@ -56,7 +36,7 @@ func (h *HandlerBase) CreateComment(c *fiber.Ctx) error {
 		CreatedAt: comment.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 		UpdatedAt: comment.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 		Body:      comment.Body,
-		Author: Author{
+		Author: entity.Profile{
 			Username:  comment.Username,
 			Bio:       comment.Bio.String,
 			Image:     comment.Image.String,
@@ -92,11 +72,11 @@ func (h *HandlerBase) DeleteComment(c *fiber.Ctx) error {
 }
 
 type Comment struct {
-	ID        int32  `json:"id"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-	Body      string `json:"body"`
-	Author    Author `json:"author"`
+	ID        int32          `json:"id"`
+	CreatedAt string         `json:"createdAt"`
+	UpdatedAt string         `json:"updatedAt"`
+	Body      string         `json:"body"`
+	Author    entity.Profile `json:"author"`
 }
 
 func (h *HandlerBase) GetComments(c *fiber.Ctx) error {
@@ -114,7 +94,7 @@ func (h *HandlerBase) GetComments(c *fiber.Ctx) error {
 			CreatedAt: comment.CreatedAt,
 			UpdatedAt: comment.UpdatedAt,
 			Body:      comment.Body,
-			Author: Author{
+			Author: entity.Profile{
 				Username:  comment.Username,
 				Bio:       comment.Bio.String,
 				Image:     comment.Image.String,

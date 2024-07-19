@@ -1,10 +1,10 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: "usecase/dto/migrations/schema.sql"
-    queries: "usecase/dto/query"
+    schema: "umigrations/schema.sql"
+    queries: "internal/usecase/repo/"
     rules:
-      - sqlc/dto-prepare
+      - sqlc/repo-prepare
     gen:
       go:
         emit_interface: true
@@ -12,7 +12,7 @@ sql:
         emit_json_tags: true
         json_tags_case_style: "camel"
         package: "sqlc"
-        out: "usecase/dto/sqlc"
+        out: "internal/usecase/repo/sqlc"
         emit_prepared_queries: false
         emit_exact_table_names: false
         emit_empty_slices: true

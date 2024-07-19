@@ -1,4 +1,4 @@
-package dto
+package postgres
 
 import (
 	"context"
@@ -7,12 +7,8 @@ import (
 	"realworld-fiber-sqlc/pkg/logger"
 )
 
-var DB *pgxpool.Pool
-
 func NewPool(l *logger.Logger) (*pgxpool.Pool, error) {
 	l.Info("Connecting to the database")
-
-	//connStr := "postgres://postgres:postgres@localhost:5432/realworld"
 
 	connStr := os.Getenv("DATABASE_URL")
 	dbpool, err := pgxpool.New(context.Background(), connStr)
@@ -29,5 +25,4 @@ func NewPool(l *logger.Logger) (*pgxpool.Pool, error) {
 	}
 
 	return dbpool, nil
-
 }

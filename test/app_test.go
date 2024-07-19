@@ -6,8 +6,9 @@ import (
 	"io"
 	"net/http"
 	"realworld-fiber-sqlc/internal/controller/http"
+	"realworld-fiber-sqlc/internal/usecase/repo"
+	sqlc2 "realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 	"realworld-fiber-sqlc/pkg/logger"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func mockUserIDFromToken(c *fiber.Ctx) int64 {
 	return 1 // Mock user ID
 }
 
-func setupRoutes(app *fiber.App, dbQueries sqlc.Querier, l logger.Interface) {
+func setupRoutes(app *fiber.App, dbQueries sqlc2.Querier, l logger.Interface) {
 	routes.Setup(app, dbQueries, l)
 }
 
@@ -45,7 +46,7 @@ func TestApp(t *testing.T) {
 	}
 
 	app := fiber.New()
-	dbQueries := &sqlc.MockQuerier{}
+	dbQueries := &repo.MockQuerier{}
 	l := &logger.MockLogger{}
 	setupRoutes(app, dbQueries, l)
 

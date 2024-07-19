@@ -4,16 +4,16 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"realworld-fiber-sqlc/internal/controller/http"
+	"realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 	"realworld-fiber-sqlc/pkg/logger"
-	"realworld-fiber-sqlc/usecase/dto"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
+	"realworld-fiber-sqlc/pkg/postgres"
 )
 
 func New() *fiber.App {
 	l := logger.New("debug")
 
 	var err error
-	pool, err := dto.NewPool(l)
+	pool, err := postgres.NewPool(l)
 	if err != nil {
 		l.Fatal(err)
 	}

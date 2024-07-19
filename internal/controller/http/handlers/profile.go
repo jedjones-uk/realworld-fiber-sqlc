@@ -3,22 +3,9 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
+	"realworld-fiber-sqlc/internal/entity"
+	"realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 )
-
-type Profile struct {
-	Username  string `json:"username"`
-	Bio       string `json:"bio"`
-	Image     string `json:"image"`
-	Following bool   `json:"following"`
-}
-
-type Author struct {
-	Username  string `json:"username"`
-	Bio       string `json:"bio"`
-	Image     string `json:"image"`
-	Following bool   `json:"following"`
-}
 
 func (h *HandlerBase) GetProfile(c *fiber.Ctx) error {
 	h.Logger.Info("getProfile handler")
@@ -77,7 +64,7 @@ func (h *HandlerBase) Follow(c *fiber.Ctx) error {
 	}
 
 	return c.Status(200).JSON(fiber.Map{
-		"profile": Profile{
+		"profile": entity.Profile{
 			Username:  profile.Username,
 			Bio:       profile.Bio.String,
 			Image:     profile.Image.String,
@@ -114,7 +101,7 @@ func (h *HandlerBase) Unfollow(c *fiber.Ctx) error {
 	}
 
 	return c.Status(200).JSON(fiber.Map{
-		"profile": Profile{
+		"profile": entity.Profile{
 			Username:  profile.Username,
 			Bio:       profile.Bio.String,
 			Image:     profile.Image.String,

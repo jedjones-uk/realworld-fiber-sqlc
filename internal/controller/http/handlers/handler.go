@@ -1,8 +1,8 @@
 package handlers
 
 import (
+	"realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 	"realworld-fiber-sqlc/pkg/logger"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
 type HandlerBase struct {

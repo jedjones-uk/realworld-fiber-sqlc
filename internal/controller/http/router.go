@@ -3,9 +3,9 @@ package routes
 import (
 	"github.com/gofiber/fiber/v2"
 	"realworld-fiber-sqlc/internal/controller/http/handlers"
+	"realworld-fiber-sqlc/internal/usecase/repo/sqlc"
 	"realworld-fiber-sqlc/pkg/logger"
 	"realworld-fiber-sqlc/pkg/middleware"
-	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
 func Setup(app *fiber.App, dbQueries sqlc.Querier, l logger.Interface) {
