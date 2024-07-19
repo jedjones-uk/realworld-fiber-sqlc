@@ -1,7 +1,7 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: "umigrations/schema.sql"
+    schema: "migrations/schema.sql"
     queries: "internal/usecase/repo/"
     rules:
       - sqlc/repo-prepare

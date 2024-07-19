@@ -11,6 +11,7 @@ func NewPool(l *logger.Logger) (*pgxpool.Pool, error) {
 	l.Info("Connecting to the database")
 
 	connStr := os.Getenv("DATABASE_URL")
+	//connStr := "postgres://postgres:postgres@localhost:5432/realworld?sslmode=disable"
 	dbpool, err := pgxpool.New(context.Background(), connStr)
 	if err != nil {
 		l.Warn("failed to connect to the database")

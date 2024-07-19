@@ -9,7 +9,7 @@ import (
 	"realworld-fiber-sqlc/pkg/postgres"
 )
 
-func New() *fiber.App {
+func New() {
 	l := logger.New("debug")
 
 	var err error
@@ -28,11 +28,11 @@ func New() *fiber.App {
 		AllowMethods: "GET, HEAD, PUT, PATCH, POST, DELETE",
 	}))
 
+	routes.Setup(app, dbQueries, l)
+
 	app.Use(func(c *fiber.Ctx) error {
 		return c.SendStatus(404)
 	})
 
-	routes.Setup(app, dbQueries, l)
-
-	return app
+	app.Listen(":3000")
 }

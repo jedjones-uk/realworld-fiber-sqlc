@@ -5,6 +5,5 @@ import (
 )
 
 func main() {
-	realWorld := app.New()
-	realWorld.Listen(":3000")
+	app.New()
 }
