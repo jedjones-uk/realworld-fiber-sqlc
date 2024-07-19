@@ -128,6 +128,7 @@ func (q *Queries) DeleteArticle(ctx context.Context, arg *DeleteArticleParams) (
 }
 
 const favoriteArticle = `-- name: FavoriteArticle :one
+
 WITH article_id_cte AS (
     SELECT a.id, a.author_id
     FROM articles a
@@ -197,6 +198,8 @@ type FavoriteArticleRow struct {
 	Taglist        interface{} `json:"taglist"`
 }
 
+// filename: queries/articles.sql
+// Insert favorite and update article, then return article details along with author information and tags
 func (q *Queries) FavoriteArticle(ctx context.Context, arg *FavoriteArticleParams) (FavoriteArticleRow, error) {
 	row := q.db.QueryRow(ctx, favoriteArticle, arg.Slug, arg.FollowerID)
 	var i FavoriteArticleRow
@@ -218,7 +221,7 @@ func (q *Queries) FavoriteArticle(ctx context.Context, arg *FavoriteArticleParam
 	return i, err
 }
 
-const feedArticles = `-- name: Feed :many
+const feedArticles = `-- name: FeedArticles :many
 WITH filtered_articles AS (SELECT a.id, a.slug, a.title, a.description, a.body, a.created_at, a.updated_at, a.favorites_count, a.author_id,
                                   u.username                   AS author_username,
                                   u.bio                        AS author_bio,

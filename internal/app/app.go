@@ -5,6 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"log"
 	"realworld-fiber-sqlc/internal/controller/http"
+	"realworld-fiber-sqlc/pkg/logger"
 	"realworld-fiber-sqlc/usecase/dto"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
@@ -15,6 +16,8 @@ func Run() {
 	//connString := "host=localhost port=5432 user=postgres password=postgres dbname=realworld sslmode=disable"
 	//maxRetries := 10
 	//retryInterval := 5 * time.Second
+
+	l := logger.New("debug")
 
 	var err error
 	pool, err := dto.NewPool()
@@ -36,7 +39,7 @@ func Run() {
 		AllowMethods: "GET, HEAD, PUT, PATCH, POST, DELETE",
 	}))
 
-	http.SetupRoutes(app, dbQueries)
+	http.SetupRoutes(app, dbQueries, l)
 
 	//app.Use(l)
 	app.Listen(":3000")

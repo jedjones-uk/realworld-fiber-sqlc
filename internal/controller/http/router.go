@@ -3,13 +3,14 @@ package http
 import (
 	"github.com/gofiber/fiber/v2"
 	"realworld-fiber-sqlc/internal/controller/http/handlers"
+	"realworld-fiber-sqlc/pkg/logger"
 	"realworld-fiber-sqlc/pkg/middleware"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
 )
 
-func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries) {
+func SetupRoutes(app *fiber.App, dbQueries *sqlc.Queries, l *logger.Logger) {
 
-	handlerBase := handlers.NewHandlerQ(dbQueries)
+	handlerBase := handlers.NewHandlerQ(dbQueries, l)
 	api := app.Group("/api")
 
 	//auth

@@ -108,6 +108,10 @@ RETURNING *;
 
 
 -- name: FavoriteArticle :one
+-- filename: queries/articles.sql
+
+-- Insert favorite and update article, then return article details along with author information and tags
+-- name: FavoriteArticle :one
 WITH article_id_cte AS (
     SELECT a.id, a.author_id
     FROM articles a
@@ -154,7 +158,6 @@ SELECT
 FROM update_article ua
          JOIN users u ON ua.author_id = u.id
          LEFT JOIN taglist_cte tl ON ua.id = tl.article_id;
-
 
 -- name: UnfavoriteArticle :one
 WITH article_id_cte AS (SELECT a.id, a.author_id
