@@ -33,16 +33,20 @@ WITH inserted_article AS (
 ),
      inserted_tags AS (
          INSERT INTO tags (tag)
-             SELECT unnest($6::text[])
+             SELECT unnest(@tags::text[])
              ON CONFLICT (tag) DO NOTHING
              RETURNING id, tag
      ),
-     tag_ids AS (
-         SELECT id FROM tags WHERE tag = ANY($6)
+     all_tags AS (
+         SELECT id, tag FROM inserted_tags
+         UNION
+         SELECT id, tag FROM tags WHERE tag = ANY(@tags)
      ),
      inserted_article_tags AS (
          INSERT INTO article_tags (article_id, tag_id)
-             SELECT (SELECT id FROM inserted_article), id FROM tag_ids
+             SELECT ia.id, t.id
+             FROM inserted_article ia
+                      CROSS JOIN all_tags t
              ON CONFLICT (article_id, tag_id) DO NOTHING
      )
 SELECT
@@ -53,11 +57,9 @@ SELECT
     ia.created_at AS "createdAt",
     ia.updated_at AS "updatedAt",
     ia.favorites_count AS "favoritesCount",
-    json_build_object(
-            'username', u.username,
-            'bio', u.bio,
-            'image', u.image
-    ) AS author,
+    u.username,
+    u.bio,
+    u.image,
     array_agg(t.tag) AS tagList
 FROM inserted_article ia
          JOIN users u ON ia.author_id = u.id
@@ -213,21 +215,15 @@ SELECT a.slug,
        u.bio                                           AS "authorBio",
        u.image                                         AS "authorImage",
        COALESCE(fav.user_id IS NOT NULL, FALSE)        AS "favorited",
-       ARRAY_AGG(t.tag)                                AS "tagList",
+       ARRAY_AGG(t.tag ORDER BY t.tag)                 AS "tagList",
        COALESCE(follow.follower_id IS NOT NULL, FALSE) AS "following"
 FROM articles a
-         JOIN
-     users u ON a.author_id = u.id
-         LEFT JOIN
-     article_tags at ON a.id = at.article_id
-         LEFT JOIN
-     tags t ON at.tag_id = t.id
-         LEFT JOIN
-     (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
-         LEFT JOIN
-     favorites fav ON a.id = fav.article_id AND fav.user_id = sqlc.narg('user_id')::BIGINT
-         LEFT JOIN
-     follows follow ON u.id = follow.followee_id AND follow.follower_id = sqlc.narg('user_id')::BIGINT
+         JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags at ON a.id = at.article_id
+         LEFT JOIN tags t ON at.tag_id = t.id
+         LEFT JOIN (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
+         LEFT JOIN favorites fav ON a.id = fav.article_id AND fav.user_id = sqlc.narg('user_id')::BIGINT
+         LEFT JOIN follows follow ON u.id = follow.followee_id AND follow.follower_id = sqlc.narg('user_id')::BIGINT
 GROUP BY a.id, u.id, f.favorites_count, fav.user_id, follow.follower_id
 HAVING (sqlc.narg('tag')::TEXT IS NULL OR sqlc.narg('tag')::TEXT = ANY (ARRAY_AGG(t.tag)::TEXT[]))
    AND (sqlc.narg('author')::TEXT IS NULL OR u.username = sqlc.narg('author')::TEXT)
@@ -237,8 +233,7 @@ HAVING (sqlc.narg('tag')::TEXT IS NULL OR sqlc.narg('tag')::TEXT = ANY (ARRAY_AG
                                                                              FROM users
                                                                              WHERE username = sqlc.narg('favorited_by')::TEXT)))
 ORDER BY a.created_at DESC
-LIMIT sqlc.narg('limitt')::INT OFFSET sqlc.narg('offsett')::INT;
-
+LIMIT sqlc.arg('limitt')::INT OFFSET sqlc.arg('offsett')::INT;
 
 -- name: FeedArticles :many
 WITH filtered_articles AS (SELECT a.*,

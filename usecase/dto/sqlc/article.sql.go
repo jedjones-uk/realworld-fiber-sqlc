@@ -23,12 +23,16 @@ WITH inserted_article AS (
              ON CONFLICT (tag) DO NOTHING
              RETURNING id, tag
      ),
-     tag_ids AS (
-         SELECT id FROM tags WHERE tag = ANY($6)
+     all_tags AS (
+         SELECT id, tag FROM inserted_tags
+         UNION
+         SELECT id, tag FROM tags WHERE tag = ANY($6)
      ),
      inserted_article_tags AS (
          INSERT INTO article_tags (article_id, tag_id)
-             SELECT (SELECT id FROM inserted_article), id FROM tag_ids
+             SELECT ia.id, t.id
+             FROM inserted_article ia
+                      CROSS JOIN all_tags t
              ON CONFLICT (article_id, tag_id) DO NOTHING
      )
 SELECT
@@ -39,11 +43,9 @@ SELECT
     ia.created_at AS "createdAt",
     ia.updated_at AS "updatedAt",
     ia.favorites_count AS "favoritesCount",
-    json_build_object(
-            'username', u.username,
-            'bio', u.bio,
-            'image', u.image
-    ) AS author,
+    u.username,
+    u.bio,
+    u.image,
     array_agg(t.tag) AS tagList
 FROM inserted_article ia
          JOIN users u ON ia.author_id = u.id
@@ -58,7 +60,7 @@ type CreateArticleParams struct {
 	Description string      `json:"description"`
 	Body        string      `json:"body"`
 	AuthorID    pgtype.Int8 `json:"authorId"`
-	Column6     []string    `json:"column6"`
+	Tags        []string    `json:"tags"`
 }
 
 type CreateArticleRow struct {
@@ -69,7 +71,9 @@ type CreateArticleRow struct {
 	CreatedAt      pgtype.Timestamp `json:"createdAt"`
 	UpdatedAt      pgtype.Timestamp `json:"updatedAt"`
 	FavoritesCount int32            `json:"favoritesCount"`
-	Author         []byte           `json:"author"`
+	Username       string           `json:"username"`
+	Bio            pgtype.Text      `json:"bio"`
+	Image          pgtype.Text      `json:"image"`
 	Taglist        interface{}      `json:"taglist"`
 }
 
@@ -80,7 +84,7 @@ func (q *Queries) CreateArticle(ctx context.Context, arg *CreateArticleParams) (
 		arg.Description,
 		arg.Body,
 		arg.AuthorID,
-		arg.Column6,
+		arg.Tags,
 	)
 	var i CreateArticleRow
 	err := row.Scan(
@@ -91,7 +95,9 @@ func (q *Queries) CreateArticle(ctx context.Context, arg *CreateArticleParams) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.FavoritesCount,
-		&i.Author,
+		&i.Username,
+		&i.Bio,
+		&i.Image,
 		&i.Taglist,
 	)
 	return i, err
@@ -417,21 +423,15 @@ SELECT a.slug,
        u.bio                                           AS "authorBio",
        u.image                                         AS "authorImage",
        COALESCE(fav.user_id IS NOT NULL, FALSE)        AS "favorited",
-       ARRAY_AGG(t.tag)                                AS "tagList",
+       ARRAY_AGG(t.tag ORDER BY t.tag)                 AS "tagList",
        COALESCE(follow.follower_id IS NOT NULL, FALSE) AS "following"
 FROM articles a
-         JOIN
-     users u ON a.author_id = u.id
-         LEFT JOIN
-     article_tags at ON a.id = at.article_id
-         LEFT JOIN
-     tags t ON at.tag_id = t.id
-         LEFT JOIN
-     (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
-         LEFT JOIN
-     favorites fav ON a.id = fav.article_id AND fav.user_id = $1::BIGINT
-         LEFT JOIN
-     follows follow ON u.id = follow.followee_id AND follow.follower_id = $1::BIGINT
+         JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags at ON a.id = at.article_id
+         LEFT JOIN tags t ON at.tag_id = t.id
+         LEFT JOIN (SELECT article_id, COUNT(*) AS favorites_count FROM favorites GROUP BY article_id) f ON a.id = f.article_id
+         LEFT JOIN favorites fav ON a.id = fav.article_id AND fav.user_id = $1::BIGINT
+         LEFT JOIN follows follow ON u.id = follow.followee_id AND follow.follower_id = $1::BIGINT
 GROUP BY a.id, u.id, f.favorites_count, fav.user_id, follow.follower_id
 HAVING ($2::TEXT IS NULL OR $2::TEXT = ANY (ARRAY_AGG(t.tag)::TEXT[]))
    AND ($3::TEXT IS NULL OR u.username = $3::TEXT)
@@ -449,8 +449,8 @@ type ListArticlesParams struct {
 	Tag         pgtype.Text `json:"tag"`
 	Author      pgtype.Text `json:"author"`
 	FavoritedBy pgtype.Text `json:"favoritedBy"`
-	Offsett     pgtype.Int4 `json:"offsett"`
-	Limitt      pgtype.Int4 `json:"limitt"`
+	Offsett     int32       `json:"offsett"`
+	Limitt      int32       `json:"limitt"`
 }
 
 type ListArticlesRow struct {

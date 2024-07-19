@@ -12,11 +12,6 @@ import (
 
 func Run() {
 
-	// logger
-	//connString := "host=localhost port=5432 user=postgres password=postgres dbname=realworld sslmode=disable"
-	//maxRetries := 10
-	//retryInterval := 5 * time.Second
-
 	l := logger.New("debug")
 
 	var err error
@@ -27,10 +22,6 @@ func Run() {
 	defer pool.Close()
 	dbQueries := sqlc.New(pool)
 
-	log.Printf("Connected to the database")
-
-	//handler := handlers.NewHandlerQ(dbQueries)
-
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
@@ -39,9 +30,12 @@ func Run() {
 		AllowMethods: "GET, HEAD, PUT, PATCH, POST, DELETE",
 	}))
 
+	app.Use(func(c *fiber.Ctx) error {
+		return c.SendStatus(404)
+	})
+
 	http.SetupRoutes(app, dbQueries, l)
 
-	//app.Use(l)
 	app.Listen(":3000")
 
 }

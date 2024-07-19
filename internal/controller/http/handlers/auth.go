@@ -106,9 +106,9 @@ func (h *HandlerBase) Register(c *fiber.Ctx) error {
 	}
 
 	if !validEmail(params.User.Email) {
-		h.Logger.Error("invalid email")
+		h.Logger.Error("invalid email", params.User.Email)
 		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{
-			"email": []string{"Invalid email"},
+			"body": []string{"Invalid email"},
 		}})
 
 	}

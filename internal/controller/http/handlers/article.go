@@ -118,7 +118,7 @@ func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 		Description: req.Article.Description,
 		Body:        req.Article.Body,
 		AuthorID:    ID,
-		Column6:     req.Article.TagList,
+		Tags:        req.Article.TagList,
 	})
 	if err != nil {
 		h.Logger.Error(err)
@@ -130,11 +130,17 @@ func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 		Title:          article.Title,
 		Description:    article.Description,
 		Body:           article.Body,
-		TagList:        formTagList(article.Taglist),
+		TagList:        req.Article.TagList,
 		CreatedAt:      article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 		UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
 		Favorited:      false,
 		FavoritesCount: article.FavoritesCount,
+		Author: Author{
+			Username:  article.Username,
+			Bio:       article.Bio.String,
+			Image:     article.Image.String,
+			Following: false,
+		},
 	}})
 }
 
@@ -357,14 +363,14 @@ func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
 		Tag:         *tagPG,
 		Author:      *authorPG,
 		FavoritedBy: *favoritedPG,
-		Limitt:      *limitPG,
-		Offsett:     *offsetPG,
+		Limitt:      limitPG.Int32,
+		Offsett:     offsetPG.Int32,
 		UserID:      *userIDPG,
 	}
 
 	articlesData, err := h.Queries.ListArticles(c.Context(), &params)
 	if err != nil {
-		h.Logger.Error(err)
+		h.Logger.Error("error getting articles: %v", err)
 		return c.SendStatus(500)
 	}
 
@@ -373,14 +379,14 @@ func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
 	for _, article := range articlesData {
 		cnt += 1
 		articles = append(articles, Article{
-			Slug:        article.Slug,
-			Title:       article.Title,
-			Description: article.Description,
-			Body:        article.Body,
-			TagList:     formTagList(article.TagList),
-			CreatedAt:   article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
-			UpdatedAt:   article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
-
+			Slug:           article.Slug,
+			Title:          article.Title,
+			Description:    article.Description,
+			Body:           article.Body,
+			TagList:        formTagList(article.TagList),
+			CreatedAt:      article.CreatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
+			UpdatedAt:      article.UpdatedAt.Time.Format("2006-01-02T15:04:05.000Z"),
+			FavoritesCount: int32(article.FavoritesCount),
 			Author: Author{
 				Username:  article.AuthorUsername,
 				Bio:       article.AuthorBio.String,
