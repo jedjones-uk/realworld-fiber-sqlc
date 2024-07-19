@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	"realworld-fiber-sqlc/usecase/dto/sqlc"
@@ -58,6 +57,7 @@ func transformString(s string) string {
 }
 
 func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
+	h.Logger.Info("GetArticle handler")
 	userID := userIDFromToken(c)
 	ID := pgtype.Int8{}
 	if userID != 0 {
@@ -65,12 +65,15 @@ func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 	}
 
 	slug := c.Params("slug")
+
+	h.Logger.Info("querying article")
 	article, err := h.Queries.GetArticle(c.Context(), &sqlc.GetArticleParams{
 		Slug:   slug,
 		UserID: ID,
 	})
 	if err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
 	return c.Status(200).JSON(fiber.Map{"article": Article{
@@ -93,14 +96,16 @@ func (h *HandlerBase) GetArticle(c *fiber.Ctx) error {
 }
 
 func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
+	h.Logger.Info("CreateArticle handler")
 	var req CreateArticleReq
 	if err := c.BodyParser(&req); err != nil {
-		return err
+		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"body": []string{"can't be blank"}}})
 	}
 
 	authorId := userIDFromToken(c)
 	if authorId == 0 {
-		return c.Status(401).JSON(fiber.Map{"message": "Unauthorized"})
+		h.Logger.Info("Unauthorized")
+		return c.SendStatus(401)
 	}
 	ID := pgtype.Int8{}
 	ID.Scan(authorId)
@@ -116,8 +121,8 @@ func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 		Column6:     req.Article.TagList,
 	})
 	if err != nil {
-		fmt.Println(article)
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
 	return c.Status(200).JSON(fiber.Map{"article": Article{
@@ -134,18 +139,25 @@ func (h *HandlerBase) CreateArticle(c *fiber.Ctx) error {
 }
 
 func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
+	h.Logger.Info("UpdateArticle handler")
 	userId := userIDFromToken(c)
 	if userId == 0 {
-		return c.Status(401).JSON(fiber.Map{"message": "Unauthorized"})
+		h.Logger.Info("Unauthorized")
+		return c.SendStatus(401)
 	}
 	ID := pgtype.Int8{}
 	ID.Scan(userId)
 
 	slug := c.Params("slug")
+	if slug == "" {
+		h.Logger.Info("Slug is empty")
+		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"slug": []string{"can't be blank"}}})
+	}
 
 	var req CreateArticleReq
 	if err := c.BodyParser(&req); err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"body": []string{"can't be blank"}}})
 	}
 
 	newSlug := transformString(req.Article.Title)
@@ -159,7 +171,7 @@ func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 		Slug_2:      newSlug,
 	})
 	if err != nil {
-		return err
+		return c.SendStatus(500)
 	}
 
 	return c.Status(200).JSON(fiber.Map{"article": Article{
@@ -183,38 +195,51 @@ func (h *HandlerBase) UpdateArticle(c *fiber.Ctx) error {
 }
 
 func (h *HandlerBase) DeleteArticle(c *fiber.Ctx) error {
+	h.Logger.Info("DeleteArticle handler")
 	userId := userIDFromToken(c)
 	if userId == 0 {
-		return c.Status(401).JSON(fiber.Map{"message": "Unauthorized"})
+		return c.SendStatus(401)
 	}
 
 	slug := c.Params("slug")
+	if slug == "" {
+		h.Logger.Info("Slug is empty")
+		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"slug": []string{"can't be blank"}}})
+	}
 
-	_, err := h.Queries.DeleteArticle(c.Context(), &sqlc.DeleteArticleParams{
+	err := h.Queries.DeleteArticle(c.Context(), &sqlc.DeleteArticleParams{
 		Slug:     slug,
 		AuthorID: pgtype.Int8{Int64: userId, Valid: true},
 	})
 	if err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
-	return c.Status(200).JSON(fiber.Map{})
+	return c.SendStatus(200)
 }
 
 func (h *HandlerBase) FavoriteArticle(c *fiber.Ctx) error {
+	h.Logger.Info("FavoriteArticle handler")
 	userId := userIDFromToken(c)
 	if userId == 0 {
-		return c.Status(401).JSON(fiber.Map{"message": "Unauthorized"})
+		h.Logger.Info("Unauthorized")
+		return c.SendStatus(401)
 	}
 
 	slug := c.Params("slug")
+	if slug == "" {
+		h.Logger.Info("Slug is empty")
+		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"slug": []string{"can't be blank"}}})
+	}
 
 	article, err := h.Queries.FavoriteArticle(c.Context(), &sqlc.FavoriteArticleParams{
 		Slug:       slug,
 		FollowerID: userId,
 	})
 	if err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
 	return c.Status(200).JSON(fiber.Map{"article": Article{
@@ -237,19 +262,26 @@ func (h *HandlerBase) FavoriteArticle(c *fiber.Ctx) error {
 }
 
 func (h *HandlerBase) UnfavoriteArticle(c *fiber.Ctx) error {
+	h.Logger.Info("UnfavoriteArticle handler")
 	userId := userIDFromToken(c)
 	if userId == 0 {
+		h.Logger.Info("Unauthorized")
 		return c.Status(401).JSON(fiber.Map{"message": "Unauthorized"})
 	}
 
 	slug := c.Params("slug")
+	if slug == "" {
+		h.Logger.Info("Slug is empty")
+		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{"slug": []string{"can't be blank"}}})
+	}
 
 	article, err := h.Queries.UnfavoriteArticle(c.Context(), &sqlc.UnfavoriteArticleParams{
 		Slug:       slug,
 		FollowerID: userId,
 	})
 	if err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
 	return c.Status(200).JSON(fiber.Map{"article": Article{
@@ -272,36 +304,43 @@ func (h *HandlerBase) UnfavoriteArticle(c *fiber.Ctx) error {
 }
 
 func (h *HandlerBase) GetTags(c *fiber.Ctx) error {
+	h.Logger.Info("GetTags handler")
 	tags, err := h.Queries.GetTags(c.Context())
 	if err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
 	return c.Status(200).JSON(fiber.Map{"tags": tags})
 }
 
 func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
+	h.Logger.Info("GetArticles handler")
 	userID := userIDFromToken(c)
 	userIDPG := &pgtype.Int8{}
 	if userID != 0 {
+		h.Logger.Info("user is authorized")
 		_ = userIDPG.Scan(userID)
 	}
 
 	tag := c.Query("tag")
 	tagPG := &pgtype.Text{}
 	if tag != "" {
+		h.Logger.Info("tag is not empty", tag)
 		_ = tagPG.Scan(tag)
 	}
 
 	author := c.Query("author")
 	authorPG := &pgtype.Text{}
 	if author != "" {
+		h.Logger.Info("author is not empty", author)
 		_ = authorPG.Scan(author)
 	}
 
 	favorited := c.Query("favorited")
 	favoritedPG := &pgtype.Text{}
 	if favorited != "" {
+		h.Logger.Info("favorited is not empty", favorited)
 		_ = favoritedPG.Scan(favorited)
 	}
 
@@ -325,7 +364,8 @@ func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
 
 	articlesData, err := h.Queries.ListArticles(c.Context(), &params)
 	if err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
 	articles := make([]Article, 0)
@@ -355,11 +395,13 @@ func (h *HandlerBase) GetArticles(c *fiber.Ctx) error {
 }
 
 func (h *HandlerBase) Feed(c *fiber.Ctx) error {
+	h.Logger.Info("Feed handler")
 	userID := userIDFromToken(c)
-	fmt.Println("fdf")
 	if userID == 0 {
-		return c.Status(401).JSON(fiber.Map{"message": "Unauthorized"})
+		h.Logger.Info("unauthorized")
+		return c.SendStatus(401)
 	}
+
 	userIDPG := &pgtype.Int4{}
 	_ = userIDPG.Scan(userID)
 
@@ -377,7 +419,8 @@ func (h *HandlerBase) Feed(c *fiber.Ctx) error {
 		UserID:  *userIDPG,
 	})
 	if err != nil {
-		return err
+		h.Logger.Error(err)
+		return c.SendStatus(500)
 	}
 
 	articles := make([]Article, 0)

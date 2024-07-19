@@ -99,12 +99,11 @@ FROM updated_article ua
 GROUP BY ua.id, ua.slug, ua.title, ua.description, ua.body, ua.created_at, ua.updated_at, ua.favorites_count, u.id, u.username, u.bio, u.image;
 
 
--- name: DeleteArticle :one
+-- name: DeleteArticle :exec
 DELETE
 FROM articles
 WHERE slug = $1
-  and author_id = $2
-RETURNING *;
+  and author_id = $2;
 
 
 -- name: FavoriteArticle :one

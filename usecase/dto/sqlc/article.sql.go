@@ -97,12 +97,11 @@ func (q *Queries) CreateArticle(ctx context.Context, arg *CreateArticleParams) (
 	return i, err
 }
 
-const deleteArticle = `-- name: DeleteArticle :one
+const deleteArticle = `-- name: DeleteArticle :exec
 DELETE
 FROM articles
 WHERE slug = $1
   and author_id = $2
-RETURNING id, slug, title, description, body, created_at, updated_at, favorites_count, author_id
 `
 
 type DeleteArticleParams struct {
@@ -110,21 +109,9 @@ type DeleteArticleParams struct {
 	AuthorID pgtype.Int8 `json:"authorId"`
 }
 
-func (q *Queries) DeleteArticle(ctx context.Context, arg *DeleteArticleParams) (Article, error) {
-	row := q.db.QueryRow(ctx, deleteArticle, arg.Slug, arg.AuthorID)
-	var i Article
-	err := row.Scan(
-		&i.ID,
-		&i.Slug,
-		&i.Title,
-		&i.Description,
-		&i.Body,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.FavoritesCount,
-		&i.AuthorID,
-	)
-	return i, err
+func (q *Queries) DeleteArticle(ctx context.Context, arg *DeleteArticleParams) error {
+	_, err := q.db.Exec(ctx, deleteArticle, arg.Slug, arg.AuthorID)
+	return err
 }
 
 const favoriteArticle = `-- name: FavoriteArticle :one
