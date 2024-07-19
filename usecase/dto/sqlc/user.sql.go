@@ -37,12 +37,22 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (User, 
 	return i, err
 }
 
-const followUser = `-- name: FollowUser :exec
+const followUser = `-- name: FollowUser :one
 WITH followee AS (
-    SELECT id FROM users WHERE username = $1
-)
-INSERT INTO follows (follower_id, followee_id)
-SELECT $2, id FROM followee
+    SELECT id, username, bio, image FROM users WHERE username = $1
+),
+     insert_follow AS (
+         INSERT INTO follows (follower_id, followee_id)
+             SELECT $2, id FROM followee
+             RETURNING followee_id
+     )
+SELECT
+    f.username,
+    f.bio,
+    f.image,
+    TRUE AS following
+FROM followee f
+WHERE f.id = (SELECT followee_id FROM insert_follow)
 `
 
 type FollowUserParams struct {
@@ -50,9 +60,23 @@ type FollowUserParams struct {
 	FollowerID int64  `json:"followerId"`
 }
 
-func (q *Queries) FollowUser(ctx context.Context, arg *FollowUserParams) error {
-	_, err := q.db.Exec(ctx, followUser, arg.Username, arg.FollowerID)
-	return err
+type FollowUserRow struct {
+	Username  string      `json:"username"`
+	Bio       pgtype.Text `json:"bio"`
+	Image     pgtype.Text `json:"image"`
+	Following bool        `json:"following"`
+}
+
+func (q *Queries) FollowUser(ctx context.Context, arg *FollowUserParams) (FollowUserRow, error) {
+	row := q.db.QueryRow(ctx, followUser, arg.Username, arg.FollowerID)
+	var i FollowUserRow
+	err := row.Scan(
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Following,
+	)
+	return i, err
 }
 
 const getUser = `-- name: GetUser :one
@@ -125,8 +149,8 @@ FROM profile_data
 `
 
 type GetUserProfileParams struct {
-	Username   string `json:"username"`
-	FollowerID int64  `json:"followerId"`
+	Username   string      `json:"username"`
+	FollowerID pgtype.Int8 `json:"followerId"`
 }
 
 type GetUserProfileRow struct {
@@ -194,12 +218,22 @@ func (q *Queries) GetUserProfileById(ctx context.Context, arg *GetUserProfileByI
 	return i, err
 }
 
-const unfollowUser = `-- name: UnfollowUser :exec
+const unfollowUser = `-- name: UnfollowUser :one
 WITH followee AS (
-    SELECT id FROM users WHERE username = $1
-)
-DELETE FROM follows
-WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee)
+    SELECT id, username, bio, image FROM users WHERE username = $1
+),
+     deleted_follow AS (
+         DELETE FROM follows
+             WHERE follower_id = $2 AND followee_id = (SELECT id FROM followee)
+             RETURNING followee_id
+     )
+SELECT
+    f.username,
+    f.bio,
+    f.image,
+    FALSE AS following
+FROM followee f
+WHERE f.id = (SELECT followee_id FROM deleted_follow)
 `
 
 type UnfollowUserParams struct {
@@ -207,9 +241,23 @@ type UnfollowUserParams struct {
 	FollowerID int64  `json:"followerId"`
 }
 
-func (q *Queries) UnfollowUser(ctx context.Context, arg *UnfollowUserParams) error {
-	_, err := q.db.Exec(ctx, unfollowUser, arg.Username, arg.FollowerID)
-	return err
+type UnfollowUserRow struct {
+	Username  string      `json:"username"`
+	Bio       pgtype.Text `json:"bio"`
+	Image     pgtype.Text `json:"image"`
+	Following bool        `json:"following"`
+}
+
+func (q *Queries) UnfollowUser(ctx context.Context, arg *UnfollowUserParams) (UnfollowUserRow, error) {
+	row := q.db.QueryRow(ctx, unfollowUser, arg.Username, arg.FollowerID)
+	var i UnfollowUserRow
+	err := row.Scan(
+		&i.Username,
+		&i.Bio,
+		&i.Image,
+		&i.Following,
+	)
+	return i, err
 }
 
 const updateUser = `-- name: UpdateUser :one
