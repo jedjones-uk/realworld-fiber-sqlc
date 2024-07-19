@@ -1,7 +1,6 @@
 version: '3.9'
 
 services:
-
   postgres:
     image: postgres:latest
     container_name: postgres
@@ -17,8 +16,8 @@ services:
 
   realworld:
     build: .
-#    environment:
-#      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/realworld
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/realworld
     depends_on:
       - postgres
     ports:
