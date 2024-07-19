@@ -26,12 +26,17 @@ type CurrentUserResp struct {
 }
 
 func (h *HandlerBase) CurrentUser(c *fiber.Ctx) error {
-	var id int64
-	id = userIDFromToken(c)
+	h.Logger.Info("currentUser handler")
+
+	id := userIDFromToken(c)
+	if id == 0 {
+		return c.SendStatus(401)
+	}
 
 	user, err := h.Queries.GetUser(c.Context(), id)
 	if err != nil {
-		return err
+		h.Logger.Error("error getting user: %v", err)
+		return c.SendStatus(500)
 	}
 
 	token := c.Locals("user").(*jwt.Token).Raw
@@ -46,18 +51,27 @@ func (h *HandlerBase) CurrentUser(c *fiber.Ctx) error {
 }
 
 func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
-	var id int64
-	id = userIDFromToken(c)
+	h.Logger.Info("updateProfile handler")
+	id := userIDFromToken(c)
+	if id == 0 {
+		h.Logger.Info("user not authenticated")
+		return c.SendStatus(401)
+	}
 
 	var params UserUPDReq
 	if err := c.BodyParser(&params); err != nil {
-		return err
+		h.Logger.Error("error parsing body: %v", err)
+		return c.Status(422).JSON(fiber.Map{"errors": fiber.Map{
+			"body": []string{"Invalid body"},
+		}})
 	}
 
 	hashed, err := hash.HashPassword(params.User.Password)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		h.Logger.Error("error hashing password: %v", err)
+		return c.SendStatus(500)
 	}
+
 	user, err := h.Queries.UpdateUser(c.Context(), &sqlc.UpdateUserParams{
 		ID:       id,
 		Email:    params.User.Email,
@@ -67,7 +81,8 @@ func (h *HandlerBase) UpdateProfile(c *fiber.Ctx) error {
 		Image:    params.User.Image,
 	})
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		h.Logger.Error("error updating user: %v", err)
+		return c.SendStatus(500)
 	}
 
 	token := c.Locals("user").(*jwt.Token).Raw
